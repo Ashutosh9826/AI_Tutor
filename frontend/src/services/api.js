@@ -6,6 +6,10 @@ const api = axios.create({
   baseURL: API_URL,
 });
 
+const persistUser = (user) => {
+  localStorage.setItem('user', JSON.stringify(user));
+};
+
 // Request interceptor to add token if it exists
 api.interceptors.request.use(
   (config) => {
@@ -41,7 +45,7 @@ export const authService = {
     const response = await api.post('/auth/login', { email, password });
     if (response.data.token) {
       localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      persistUser(response.data.user);
     }
     return response.data;
   },
@@ -50,7 +54,7 @@ export const authService = {
     const response = await api.post('/auth/register', userData);
     if (response.data.token) {
       localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      persistUser(response.data.user);
     }
     return response.data;
   },
@@ -70,8 +74,25 @@ export const authService = {
     const response = await api.post('/auth/google', { credential, role });
     if (response.data.token) {
       localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      persistUser(response.data.user);
     }
+    return response.data;
+  },
+
+  getMe: async () => {
+    const response = await api.get('/auth/me');
+    persistUser(response.data);
+    return response.data;
+  },
+
+  updateMe: async (payload) => {
+    const response = await api.patch('/auth/me', payload);
+    persistUser(response.data);
+    return response.data;
+  },
+
+  changePassword: async (payload) => {
+    const response = await api.patch('/auth/me/password', payload);
     return response.data;
   }
 };

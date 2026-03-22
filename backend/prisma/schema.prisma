@@ -16,6 +16,10 @@ model User {
   email      String   @unique
   password   String?  // nullable for oauth
   role       String   // 'TEACHER' or 'STUDENT'
+  avatar_url String?
+  notify_assignments   Boolean @default(true)
+  notify_due_soon      Boolean @default(true)
+  notify_announcements Boolean @default(true)
   created_at DateTime @default(now())
 
   // Relations
