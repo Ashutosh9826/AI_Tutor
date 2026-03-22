@@ -31,6 +31,8 @@ model Class {
   section     String?
   class_code  String   @unique
   teacher_id  String
+  is_archived Boolean  @default(false)
+  archived_at DateTime?
   
   teacher     User     @relation("TeacherClasses", fields: [teacher_id], references: [id])
   enrollments Enrollment[]

@@ -77,8 +77,21 @@ export const authService = {
 };
 
 export const classService = {
-  getClasses: async () => {
-    const response = await api.get('/classes');
+  getClasses: async (options = {}) => {
+    const params = {};
+    if (options.archived === true) {
+      params.archived = 'true';
+    } else if (options.archived === false) {
+      params.archived = 'false';
+    } else if (options.archived === 'all') {
+      params.archived = 'all';
+    }
+
+    const response = await api.get('/classes', { params });
+    return response.data;
+  },
+  getById: async (classId) => {
+    const response = await api.get(`/classes/${classId}`);
     return response.data;
   },
   createClass: async (classData) => {
@@ -87,6 +100,14 @@ export const classService = {
   },
   joinClass: async (classCode) => {
     const response = await api.post('/classes/join', { class_code: classCode });
+    return response.data;
+  },
+  archiveClass: async (classId) => {
+    const response = await api.patch(`/classes/${classId}/archive`);
+    return response.data;
+  },
+  unarchiveClass: async (classId) => {
+    const response = await api.patch(`/classes/${classId}/unarchive`);
     return response.data;
   }
 };

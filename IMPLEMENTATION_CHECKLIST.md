@@ -21,7 +21,7 @@
 ## P2 - Next Controls To Wire (Next Batch)
 
 - [ ] Add class-card actions menu (rename/archive/copy invite link), not just open stream.
-- [ ] Add real archived class lifecycle (archive/unarchive backend + UI).
+- [x] Add real archived class lifecycle (archive/unarchive backend + UI).
 - [ ] Implement full class roster per class (teacher + student lists, invite/remove flows).
 - [ ] Add gradebook aggregation for teachers (assignment averages, missing submissions).
 - [ ] Add calendar grid view with due-date plotting, not just route placeholder.

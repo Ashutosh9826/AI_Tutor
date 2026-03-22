@@ -121,6 +121,22 @@ router.post('/', authenticateToken, requireTeacher, async (req, res) => {
     const { class_id, title } = req.body;
     const { userId } = req.user;
 
+    const targetClass = await prisma.class.findUnique({
+      where: { id: class_id },
+    });
+
+    if (!targetClass) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+
+    if (targetClass.teacher_id !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    if (targetClass.is_archived) {
+      return res.status(400).json({ error: 'Cannot create lessons in an archived class' });
+    }
+
     const newLesson = await prisma.lesson.create({
       data: {
         class_id,
@@ -156,6 +172,10 @@ router.put('/:id', authenticateToken, requireTeacher, async (req, res) => {
 
     if (existingLesson.class.teacher_id !== userId) {
       return res.status(403).json({ error: 'Access denied' });
+    }
+
+    if (existingLesson.class.is_archived) {
+      return res.status(400).json({ error: 'Cannot edit lessons in an archived class' });
     }
 
     // Use a transaction to update the lesson and replace its blocks

@@ -13,6 +13,7 @@ import GradesPage from './pages/GradesPage';
 import UtilityPage from './pages/UtilityPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import CalendarPage from './pages/CalendarPage';
+import ArchivedClassesPage from './pages/ArchivedClassesPage';
 
 function App() {
   return (
@@ -25,7 +26,7 @@ function App() {
       <Route path="/people" element={<PeoplePage />} />
       <Route path="/grades" element={<GradesPage />} />
       <Route path="/calendar" element={<CalendarPage />} />
-      <Route path="/archived" element={<UtilityPage title="Archived Classes" description="Archived classes page is now connected. Next step: teacher archive/unarchive actions from class cards." />} />
+      <Route path="/archived" element={<ArchivedClassesPage />} />
       <Route path="/settings" element={<UtilityPage title="Settings" description="Settings route is now wired. Next step: profile, notification, and account preferences." />} />
       <Route path="/help" element={<UtilityPage title="Help Center" description="Help entry point is connected. Next step: FAQs, troubleshooting, and contact support." />} />
       <Route path="/privacy" element={<UtilityPage title="Privacy Policy" description="Privacy route is connected for legal content and policy disclosures." />} />

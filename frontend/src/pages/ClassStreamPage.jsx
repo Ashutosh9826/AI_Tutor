@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { assignmentService, lessonService } from '../services/api';
+import { assignmentService, classService, lessonService } from '../services/api';
 import useAuthStore from '../store/useAuthStore';
 import TopNavBar from '../components/TopNavBar';
 import Sidebar from '../components/Sidebar';
@@ -13,6 +13,7 @@ export default function ClassStreamPage() {
   const { user } = useAuthStore();
   const [assignments, setAssignments] = useState([]);
   const [lessons, setLessons] = useState([]);
+  const [classInfo, setClassInfo] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Create assignment modal
@@ -55,12 +56,14 @@ export default function ClassStreamPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [assignData, lessonData] = await Promise.all([
+      const [assignData, lessonData, classData] = await Promise.all([
         assignmentService.getByClass(classId),
-        lessonService.getByClass(classId)
+        lessonService.getByClass(classId),
+        classService.getById(classId),
       ]);
       setAssignments(assignData);
       setLessons(lessonData);
+      setClassInfo(classData);
     } catch (err) {
       console.error('Failed to fetch class data:', err);
     } finally {
@@ -72,6 +75,11 @@ export default function ClassStreamPage() {
     e.preventDefault();
     setCreateError('');
     setCreateLoading(true);
+    if (isArchivedClass) {
+      setCreateError('Cannot create assignments in an archived class. Restore the class first.');
+      setCreateLoading(false);
+      return;
+    }
     try {
       await assignmentService.create({
         class_id: classId,
@@ -95,6 +103,11 @@ export default function ClassStreamPage() {
     e.preventDefault();
     setLessonCreateError('');
     setLessonCreateLoading(true);
+    if (isArchivedClass) {
+      setLessonCreateError('Cannot create lessons in an archived class. Restore the class first.');
+      setLessonCreateLoading(false);
+      return;
+    }
     try {
       await lessonService.create({
         class_id: classId,
@@ -116,6 +129,11 @@ export default function ClassStreamPage() {
     e.preventDefault();
     setAiError('');
     setAiLoading(true);
+    if (isArchivedClass) {
+      setAiError('Cannot generate lessons in an archived class. Restore the class first.');
+      setAiLoading(false);
+      return;
+    }
     try {
       // 1. Ask OpenRouter to draft the lesson JSON
       const generatedData = await lessonService.generateAi({
@@ -156,6 +174,8 @@ export default function ClassStreamPage() {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+  const isArchivedClass = Boolean(classInfo?.is_archived);
+
   if (loading) {
     return (
       <div className="bg-background text-on-background min-h-screen">
@@ -186,8 +206,14 @@ export default function ClassStreamPage() {
               <img alt="Class Banner" className="w-full h-full object-cover mix-blend-overlay opacity-40" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGNr4QwSQkx9fnLMJDGQ1e2oiUrchCxbWdeFB_e6OsdIMlIQTEQO0Q__FHEepLna6OC9SFvDmB_Gu0dMJoy4o8obaajklKyNvXsKK1CDiFFUJBxZoigblHzvC2uEOQQHA0RwQoHbwQgqS8QjOiTPpJDLNN0I3aYx9kOZnY0NGXv7IR6f9TH2RYg5dLNgECIZd7LBmGGrrPcQtYNncF93l3GImp7OlA93KJiM7F1F2csG4nd4eBC0uJ_OlsBoUm-d9dbyj3QeZFBQY" />
             </div>
             <div className="absolute bottom-6 left-6 text-white">
-              <h2 className="text-4xl font-bold tracking-tight">Class Stream</h2>
+              <h2 className="text-4xl font-bold tracking-tight">{classInfo?.name || 'Class Stream'}</h2>
               <p className="text-xl opacity-90">Assignments & Lessons</p>
+              {isArchivedClass && (
+                <p className="inline-flex mt-2 items-center gap-1 text-xs font-bold uppercase tracking-wider bg-black/30 rounded-full px-2 py-1">
+                  <span className="material-symbols-outlined text-sm">archive</span>
+                  Archived
+                </p>
+              )}
             </div>
             <button
               className="absolute top-4 right-4 bg-white/20 backdrop-blur-md p-2 rounded-full text-white hover:bg-white/30 transition-colors"
@@ -198,6 +224,14 @@ export default function ClassStreamPage() {
               <span className="material-symbols-outlined">info</span>
             </button>
           </section>
+
+          {isArchivedClass && (
+            <section className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+              <p className="text-sm font-semibold text-amber-800">
+                This class is archived. New assignments and lessons are disabled until it is restored from Archived Classes.
+              </p>
+            </section>
+          )}
           
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Left Column: Upcoming */}
@@ -246,7 +280,8 @@ export default function ClassStreamPage() {
                   {user?.role === 'TEACHER' && (
                     <button
                       onClick={() => { setCreateError(''); setShowCreateAssignment(true); }}
-                      className="flex items-center gap-1 text-sm font-semibold text-primary hover:bg-primary/5 px-3 py-1.5 rounded-full transition-colors"
+                      disabled={isArchivedClass}
+                      className="flex items-center gap-1 text-sm font-semibold text-primary hover:bg-primary/5 px-3 py-1.5 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <span className="material-symbols-outlined text-sm">add</span>
                       New Assignment
@@ -299,14 +334,16 @@ export default function ClassStreamPage() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => { setAiError(''); setShowGenerateAi(true); }}
-                        className="flex items-center gap-1 text-sm font-semibold signature-gradient text-white shadow hover:shadow-lg px-3 py-1.5 rounded-full transition-all active:scale-95"
+                        disabled={isArchivedClass}
+                        className="flex items-center gap-1 text-sm font-semibold signature-gradient text-white shadow hover:shadow-lg px-3 py-1.5 rounded-full transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <span className="material-symbols-outlined text-sm">magic_button</span>
                         Generate Lesson with AI
                       </button>
                       <button
                         onClick={() => { setLessonCreateError(''); setShowCreateLesson(true); }}
-                        className="flex items-center gap-1 text-sm font-semibold text-secondary hover:bg-secondary/5 px-3 py-1.5 rounded-full transition-colors"
+                        disabled={isArchivedClass}
+                        className="flex items-center gap-1 text-sm font-semibold text-secondary hover:bg-secondary/5 px-3 py-1.5 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <span className="material-symbols-outlined text-sm">add</span>
                         Manual Lesson
@@ -351,7 +388,8 @@ export default function ClassStreamPage() {
       {user?.role === 'TEACHER' && (
         <button
           onClick={() => { setCreateError(''); setShowCreateAssignment(true); }}
-          className="fixed bottom-8 right-8 w-14 h-14 bg-primary text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center z-50"
+          disabled={isArchivedClass}
+          className="fixed bottom-8 right-8 w-14 h-14 bg-primary text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center z-50 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <span className="material-symbols-outlined text-3xl">add</span>
         </button>
@@ -523,6 +561,7 @@ export default function ClassStreamPage() {
               <p><span className="font-semibold">Assignments:</span> {assignments.length}</p>
               <p><span className="font-semibold">Lessons:</span> {lessons.length}</p>
               <p><span className="font-semibold">Role:</span> {user?.role}</p>
+              <p><span className="font-semibold">Status:</span> {isArchivedClass ? 'Archived' : 'Active'}</p>
             </div>
             <div className="mt-6 flex justify-end">
               <button

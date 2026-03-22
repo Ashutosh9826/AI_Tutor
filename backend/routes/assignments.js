@@ -72,6 +72,23 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.post('/', authenticateToken, requireTeacher, async (req, res) => {
   try {
     const { class_id, title, description, due_date, attachment_url } = req.body;
+    const { userId } = req.user;
+
+    const targetClass = await prisma.class.findUnique({
+      where: { id: class_id },
+    });
+
+    if (!targetClass) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+
+    if (targetClass.teacher_id !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    if (targetClass.is_archived) {
+      return res.status(400).json({ error: 'Cannot create assignments in an archived class' });
+    }
 
     const newAssignment = await prisma.assignment.create({
       data: {
