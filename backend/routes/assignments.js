@@ -72,7 +72,11 @@ router.post('/:id/submit', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { file_url } = req.body;
-    const { userId } = req.user;
+    const { userId, role } = req.user;
+
+    if (role === 'TEACHER') {
+      return res.status(403).json({ error: 'Teachers cannot submit assignments' });
+    }
 
     const submission = await prisma.submission.create({
       data: {

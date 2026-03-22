@@ -14,6 +14,7 @@ export default function AssignmentView() {
   const [submissionContent, setSubmissionContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const isTeacher = user?.role === 'TEACHER';
 
   useEffect(() => {
     if (!user) {
@@ -38,6 +39,7 @@ export default function AssignmentView() {
   };
 
   const handleTurnIn = async () => {
+    if (isTeacher) return;
     if (!submissionContent.trim()) return;
     try {
       setSubmitting(true);
@@ -169,53 +171,82 @@ export default function AssignmentView() {
           
           {/* Sidebar */}
           <div className="lg:col-span-4 space-y-6">
-            {/* Your Work Card */}
+            {/* Role-specific Sidebar Card */}
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-100 sticky top-24">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-on-surface">Your work</h2>
-                {(assignment.submissions?.length > 0 || submitted) ? (
-                  <span className="text-xs font-bold uppercase tracking-widest text-secondary">Submitted</span>
-                ) : (
-                  <span className="text-xs font-bold uppercase tracking-widest text-tertiary">Assigned</span>
-                )}
-              </div>
-              
-              <div className="space-y-4">
-                {(assignment.submissions?.length > 0 || submitted) ? (
-                  <div className="p-4 bg-secondary/5 rounded-xl border border-secondary/20">
-                    <p className="text-sm font-bold text-secondary mb-1">Success!</p>
-                    <p className="text-xs text-on-surface-variant">Your work has been turned in.</p>
-                    {assignment.submissions?.[0]?.grade !== null && (
-                      <div className="mt-4 pt-4 border-t border-secondary/10">
-                        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Grade</p>
-                        <p className="text-2xl font-bold text-secondary">{assignment.submissions[0].grade} / 100</p>
-                        {assignment.submissions[0].feedback && (
-                          <div className="mt-2 p-3 bg-white rounded-lg text-xs italic text-on-surface-variant">
-                            "{assignment.submissions[0].feedback}"
+              {isTeacher ? (
+                <>
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-xl font-bold text-on-surface">Teacher actions</h2>
+                    <span className="text-xs font-bold uppercase tracking-widest text-primary">Instructor</span>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-sm text-on-surface-variant">
+                      Teachers can create and grade assignments. Student turn-in is disabled for teacher accounts.
+                    </p>
+                    <Link
+                      to={`/assignment/${assignment.id}/grade`}
+                      className="w-full inline-flex items-center justify-center py-3 px-4 rounded-full signature-gradient text-white font-bold shadow-md hover:shadow-lg transition-all"
+                    >
+                      Grade submissions
+                    </Link>
+                    <Link
+                      to={`/class/stream?classId=${assignment.class_id}`}
+                      className="w-full inline-flex items-center justify-center py-3 px-4 rounded-full border border-outline-variant text-on-surface font-semibold hover:bg-surface-container-low transition-colors"
+                    >
+                      Back to class stream
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-xl font-bold text-on-surface">Your work</h2>
+                    {(assignment.submissions?.length > 0 || submitted) ? (
+                      <span className="text-xs font-bold uppercase tracking-widest text-secondary">Submitted</span>
+                    ) : (
+                      <span className="text-xs font-bold uppercase tracking-widest text-tertiary">Assigned</span>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {(assignment.submissions?.length > 0 || submitted) ? (
+                      <div className="p-4 bg-secondary/5 rounded-xl border border-secondary/20">
+                        <p className="text-sm font-bold text-secondary mb-1">Success!</p>
+                        <p className="text-xs text-on-surface-variant">Your work has been turned in.</p>
+                        {assignment.submissions?.[0]?.grade !== null && (
+                          <div className="mt-4 pt-4 border-t border-secondary/10">
+                            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">Grade</p>
+                            <p className="text-2xl font-bold text-secondary">{assignment.submissions[0].grade} / 100</p>
+                            {assignment.submissions[0].feedback && (
+                              <div className="mt-2 p-3 bg-white rounded-lg text-xs italic text-on-surface-variant">
+                                "{assignment.submissions[0].feedback}"
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
+                    ) : (
+                      <>
+                        <textarea 
+                          className="w-full bg-surface-container-high border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary min-h-[120px] resize-none outline-none" 
+                          placeholder="Paste your submission link or text here..."
+                          value={submissionContent}
+                          onChange={(e) => setSubmissionContent(e.target.value)}
+                        ></textarea>
+                        <button 
+                          onClick={handleTurnIn}
+                          disabled={!submissionContent.trim() || submitting}
+                          className="w-full py-3 px-4 rounded-full signature-gradient text-white font-bold shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2" 
+                          type="button"
+                        >
+                          {submitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Turn in'}
+                        </button>
+                      </>
                     )}
                   </div>
-                ) : (
-                  <>
-                    <textarea 
-                      className="w-full bg-surface-container-high border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary min-h-[120px] resize-none outline-none" 
-                      placeholder="Paste your submission link or text here..."
-                      value={submissionContent}
-                      onChange={(e) => setSubmissionContent(e.target.value)}
-                    ></textarea>
-                    <button 
-                      onClick={handleTurnIn}
-                      disabled={!submissionContent.trim() || submitting}
-                      className="w-full py-3 px-4 rounded-full signature-gradient text-white font-bold shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2" 
-                      type="button"
-                    >
-                      {submitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Turn in'}
-                    </button>
-                  </>
-                )}
-              </div>
+                </>
+              )}
             </div>
           </div>
         </div>
