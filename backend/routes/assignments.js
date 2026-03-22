@@ -9,10 +9,33 @@ const prisma = new PrismaClient();
 router.get('/class/:classId', authenticateToken, async (req, res) => {
   try {
     const { classId } = req.params;
+    const { userId, role } = req.user;
     const assignments = await prisma.assignment.findMany({
       where: { class_id: classId },
-      orderBy: { due_date: 'asc' }
+      orderBy: { due_date: 'asc' },
+      ...(role === 'STUDENT'
+        ? {
+            include: {
+              submissions: {
+                where: { student_id: userId },
+                select: { id: true }
+              }
+            }
+          }
+        : {})
     });
+
+    if (role === 'STUDENT') {
+      const studentAssignments = assignments.map((assignment) => {
+        const { submissions, ...rest } = assignment;
+        return {
+          ...rest,
+          completed: submissions.length > 0
+        };
+      });
+      return res.json(studentAssignments);
+    }
+
     res.json(assignments);
   } catch (err) {
     console.error(err);

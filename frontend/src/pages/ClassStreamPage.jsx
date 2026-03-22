@@ -209,6 +209,12 @@ export default function ClassStreamPage() {
                     <div key={a.id} className="group cursor-pointer">
                       <div className="flex flex-col items-end gap-2">
                         <span className="text-xs font-bold text-tertiary">Due {formatDate(a.due_date)}</span>
+                        {user?.role === 'STUDENT' && a.completed && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                            <span className="material-symbols-outlined text-xs">check_circle</span>
+                            Complete
+                          </span>
+                        )}
                         {user?.role === 'TEACHER' && (
                           <Link 
                             to={`/assignment/${a.id}/grade`}
