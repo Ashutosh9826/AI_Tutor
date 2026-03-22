@@ -13,6 +13,22 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { login, register, googleLogin } = useAuthStore();
 
+  const formatAuthError = (err) => {
+    const apiError = err?.response?.data?.error;
+    if (apiError) return apiError;
+
+    const networkFailure =
+      err?.message?.toLowerCase?.().includes('network') ||
+      err?.code === 'ECONNABORTED' ||
+      err?.code === 'ERR_NETWORK';
+
+    if (networkFailure) {
+      return 'Cannot reach backend API. Start backend server on http://localhost:5000 and try again.';
+    }
+
+    return 'Authentication failed';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -25,7 +41,7 @@ export default function LoginPage() {
       }
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Authentication failed');
+      setError(formatAuthError(err));
     }
   };
 
@@ -35,7 +51,7 @@ export default function LoginPage() {
       await googleLogin(credentialResponse.credential, role);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Google sign-in failed');
+      setError(formatAuthError(err));
     }
   };
 
