@@ -78,7 +78,14 @@ export default function SettingsPage() {
         });
       } catch (err) {
         console.error(err);
-        setError(err.response?.data?.error || 'Failed to load settings');
+        setProfileName(user?.name || '');
+        setAvatarUrl(user?.avatar_url || '');
+        setNotifications({
+          notify_assignments: user?.notify_assignments ?? true,
+          notify_due_soon: user?.notify_due_soon ?? true,
+          notify_announcements: user?.notify_announcements ?? true,
+        });
+        setError(err.response?.data?.error || 'Failed to load settings from server. Showing local profile data.');
       } finally {
         setLoading(false);
       }

@@ -14,6 +14,7 @@ export default function ClassStreamPage() {
   const [assignments, setAssignments] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [classInfo, setClassInfo] = useState(null);
+  const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
 
   // Create assignment modal
@@ -56,16 +57,37 @@ export default function ClassStreamPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [assignData, lessonData, classData] = await Promise.all([
+      setLoadError('');
+      const [assignResult, lessonResult, classResult] = await Promise.allSettled([
         assignmentService.getByClass(classId),
         lessonService.getByClass(classId),
         classService.getById(classId),
       ]);
-      setAssignments(assignData);
-      setLessons(lessonData);
-      setClassInfo(classData);
+
+      if (assignResult.status === 'fulfilled') {
+        setAssignments(assignResult.value);
+      } else {
+        console.error('Failed to fetch assignments:', assignResult.reason);
+        setAssignments([]);
+      }
+
+      if (lessonResult.status === 'fulfilled') {
+        setLessons(lessonResult.value);
+      } else {
+        console.error('Failed to fetch lessons:', lessonResult.reason);
+        setLessons([]);
+      }
+
+      if (classResult.status === 'fulfilled') {
+        setClassInfo(classResult.value);
+      } else {
+        console.error('Failed to fetch class details:', classResult.reason);
+        setClassInfo(null);
+        setLoadError('Some class details could not be loaded. Existing assignments and lessons are still shown.');
+      }
     } catch (err) {
       console.error('Failed to fetch class data:', err);
+      setLoadError('Failed to load class data');
     } finally {
       setLoading(false);
     }
@@ -230,6 +252,12 @@ export default function ClassStreamPage() {
               <p className="text-sm font-semibold text-amber-800">
                 This class is archived. New assignments and lessons are disabled until it is restored from Archived Classes.
               </p>
+            </section>
+          )}
+
+          {loadError && (
+            <section className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+              <p className="text-sm font-semibold text-amber-800">{loadError}</p>
             </section>
           )}
           
