@@ -1,0 +1,268 @@
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { classService } from '../services/api';
+import useAuthStore from '../store/useAuthStore';
+import TopNavBar from '../components/TopNavBar';
+import Sidebar from '../components/Sidebar';
+
+export default function DashboardPage() {
+  const [classes, setClasses] = useState([]);
+  const { user } = useAuthStore();
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  // Modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [className, setClassName] = useState('');
+  const [classSection, setClassSection] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [modalError, setModalError] = useState('');
+  const [modalLoading, setModalLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+
+    fetchClasses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigate]);
+
+  const fetchClasses = async () => {
+    try {
+      setLoading(true);
+      const data = await classService.getClasses();
+      setClasses(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateClass = async (e) => {
+    e.preventDefault();
+    setModalError('');
+    setModalLoading(true);
+    try {
+      await classService.createClass({ name: className, section: classSection });
+      setShowCreateModal(false);
+      setClassName('');
+      setClassSection('');
+      await fetchClasses();
+    } catch (err) {
+      setModalError(err.response?.data?.error || 'Failed to create class');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const handleJoinClass = async (e) => {
+    e.preventDefault();
+    setModalError('');
+    setModalLoading(true);
+    try {
+      await classService.joinClass(joinCode);
+      setShowJoinModal(false);
+      setJoinCode('');
+      await fetchClasses();
+    } catch (err) {
+      setModalError(err.response?.data?.error || 'Failed to join class');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const openActionModal = () => {
+    setModalError('');
+    if (user?.role === 'TEACHER') {
+      setShowCreateModal(true);
+    } else {
+      setShowJoinModal(true);
+    }
+  };
+
+  const openClassStream = (classId) => {
+    navigate(`/class/stream?classId=${classId}`);
+  };
+
+  return (
+    <div className="bg-surface text-on-surface font-body min-h-screen">
+      <TopNavBar />
+      
+      <div className="flex min-h-screen pt-16">
+        <Sidebar onJoinClass={openActionModal} />
+        
+        {/* Main Content Area */}
+        <main className="flex-grow lg:ml-64 p-6 md:p-12 max-w-screen-2xl mx-auto">
+          <header className="mb-12 flex justify-between items-end">
+            <div>
+              <span className="text-blue-600 font-semibold uppercase tracking-widest text-xs mb-2 block">{user?.role === 'TEACHER' ? 'Teacher Workspace' : 'Student Workspace'}</span>
+              <h1 className="text-5xl font-bold tracking-tight text-on-surface">Welcome, {user?.name?.split(' ')[0] || 'User'}</h1>
+            </div>
+            <div className="hidden sm:block">
+              <button
+                className="group flex items-center gap-2 text-primary font-medium hover:underline decoration-2 underline-offset-4 transition-all"
+                type="button"
+                onClick={() => navigate('/classwork')}
+              >
+                View All Tasks
+                <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+              </button>
+            </div>
+          </header>
+          
+          {/* Bento-style Grid of Classes */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+            {loading ? (
+              <p>Loading classes...</p>
+            ) : classes.length > 0 ? (
+              classes.map((cls) => (
+                <article key={cls.id} className="bg-surface-container-lowest rounded-xl overflow-hidden group hover:shadow-xl transition-all duration-300">
+                  <div className="h-32 bg-slate-800 relative p-6 flex flex-col justify-between">
+                    <div className="absolute inset-0 opacity-40">
+                      <img alt="Class header" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnZS7AKdtUOvj8_zwB4yiR1JEOA6BG8fgmolXIdyK2Qugb1P-99ewOJjGKQKHtZgPQ9d32wvEujL5f8jEARWGJIVO4lI0PjeDA2PKfRO4mfuE45P7MfHiKQ6ZunZelCv-OJFcHhnerPXqrC0EH0K7cOHl1tzA8sWOQ_ZpH-wHYq6BR_in0DK_qaAqNLgpvARR51jq_Lu_SINfcpyXJCLfuUAa1dlufu_WL8EgfF4XJn--5vpEb4DH_ZXu4u0Jv2ObLtgB2-cYAriA" />
+                    </div>
+                    <div className="relative z-10 flex justify-between items-start">
+                      <Link to={`/class/stream?classId=${cls.id}`}>
+                        <h3 className="text-xl font-bold text-white hover:underline cursor-pointer">{cls.name}</h3>
+                        <p className="text-white/80 text-sm">{cls.section || 'General'}</p>
+                      </Link>
+                      <button
+                        className="text-white hover:bg-white/20 p-1 rounded-full transition-colors"
+                        type="button"
+                        onClick={() => openClassStream(cls.id)}
+                        title="Open class actions"
+                      >
+                        <span className="material-symbols-outlined">more_vert</span>
+                      </button>
+                    </div>
+                    <div className="relative z-10">
+                      <p className="text-white font-medium text-sm">
+                        {user?.role === 'TEACHER' ? `${cls._count?.enrollments || 0} Students` : cls.teacher?.name}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-6 pt-10 flex flex-col gap-6">
+                    <div className="space-y-4">
+                      {user?.role === 'TEACHER' ? (
+                        <div className="text-sm text-slate-500">Class Code: <span className="font-mono font-bold text-primary">{cls.class_code}</span></div>
+                      ) : (
+                        <p className="text-slate-400 text-sm italic">No upcoming assignments</p>
+                      )}
+                    </div>
+                    <div className="flex justify-end border-t border-slate-100 pt-4">
+                      <div className="flex gap-2">
+                        <button
+                          className="p-2 text-slate-400 hover:text-primary transition-colors"
+                          type="button"
+                          onClick={() => openClassStream(cls.id)}
+                          title="Open class stream"
+                        >
+                          <span className="material-symbols-outlined">folder_open</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <p>No classes yet.</p>
+            )}
+
+            {/* Add New Class Card */}
+            <article
+              onClick={openActionModal}
+              className="border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center p-12 group hover:border-primary hover:bg-blue-50/30 transition-all cursor-pointer"
+            >
+              <div className="w-16 h-16 rounded-full bg-slate-100 text-slate-400 group-hover:bg-primary group-hover:text-white flex items-center justify-center mb-4 transition-all">
+                <span className="material-symbols-outlined text-3xl">add</span>
+              </div>
+              <p className="font-bold text-slate-500 group-hover:text-primary">{user?.role === 'TEACHER' ? 'Create Class' : 'Join Class'}</p>
+            </article>
+          </div>
+        </main>
+      </div>
+      
+      {/* Floating Action Button (FAB) */}
+      <button
+        onClick={openActionModal}
+        className="lg:hidden fixed bottom-6 right-6 w-14 h-14 atelier-card-gradient text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 transition-transform z-50"
+      >
+        <span className="material-symbols-outlined text-2xl">add</span>
+      </button>
+
+      {/* Create Class Modal (Teacher) */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 animate-in" onClick={e => e.stopPropagation()}>
+            <h2 className="text-2xl font-bold text-on-surface mb-2">Create a Class</h2>
+            <p className="text-sm text-on-surface-variant mb-6">A unique class code will be generated automatically.</p>
+            {modalError && <div className="text-error text-sm mb-4 bg-error-container/30 p-3 rounded-lg">{modalError}</div>}
+            <form onSubmit={handleCreateClass} className="space-y-5">
+              <div>
+                <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">Class Name *</label>
+                <input
+                  type="text"
+                  value={className}
+                  onChange={(e) => setClassName(e.target.value)}
+                  required
+                  placeholder="e.g., Advanced Physics"
+                  className="w-full bg-surface-container-high border-b-2 border-outline/50 focus:border-primary focus:ring-0 px-3 py-3 transition-colors outline-none text-on-surface rounded-t-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">Section (optional)</label>
+                <input
+                  type="text"
+                  value={classSection}
+                  onChange={(e) => setClassSection(e.target.value)}
+                  placeholder="e.g., Section A"
+                  className="w-full bg-surface-container-high border-b-2 border-outline/50 focus:border-primary focus:ring-0 px-3 py-3 transition-colors outline-none text-on-surface rounded-t-lg"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 py-3 rounded-full border-2 border-outline/30 text-on-surface font-semibold hover:bg-surface-container-high transition-colors">Cancel</button>
+                <button type="submit" disabled={modalLoading} className="flex-1 py-3 rounded-full signature-gradient text-white font-semibold shadow-lg hover:shadow-xl transition-all active:scale-95 disabled:opacity-50">
+                  {modalLoading ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Join Class Modal (Student) */}
+      {showJoinModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowJoinModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 animate-in" onClick={e => e.stopPropagation()}>
+            <h2 className="text-2xl font-bold text-on-surface mb-2">Join a Class</h2>
+            <p className="text-sm text-on-surface-variant mb-6">Enter the class code provided by your teacher.</p>
+            {modalError && <div className="text-error text-sm mb-4 bg-error-container/30 p-3 rounded-lg">{modalError}</div>}
+            <form onSubmit={handleJoinClass} className="space-y-5">
+              <div>
+                <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">Class Code *</label>
+                <input
+                  type="text"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  required
+                  placeholder="e.g., ABC123"
+                  className="w-full bg-surface-container-high border-b-2 border-outline/50 focus:border-primary focus:ring-0 px-3 py-3 transition-colors outline-none text-on-surface font-mono text-lg tracking-widest text-center rounded-t-lg"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowJoinModal(false)} className="flex-1 py-3 rounded-full border-2 border-outline/30 text-on-surface font-semibold hover:bg-surface-container-high transition-colors">Cancel</button>
+                <button type="submit" disabled={modalLoading} className="flex-1 py-3 rounded-full signature-gradient text-white font-semibold shadow-lg hover:shadow-xl transition-all active:scale-95 disabled:opacity-50">
+                  {modalLoading ? 'Joining...' : 'Join'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
