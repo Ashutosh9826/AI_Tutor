@@ -12,6 +12,7 @@ import PeoplePage from './pages/PeoplePage';
 import GradesPage from './pages/GradesPage';
 import UtilityPage from './pages/UtilityPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import CalendarPage from './pages/CalendarPage';
 
 function App() {
   return (
@@ -23,7 +24,7 @@ function App() {
       <Route path="/classwork" element={<ClassworkPage />} />
       <Route path="/people" element={<PeoplePage />} />
       <Route path="/grades" element={<GradesPage />} />
-      <Route path="/calendar" element={<UtilityPage title="Calendar" description="Calendar view is now linked. Next step: render assignment deadlines on a monthly/weekly grid." />} />
+      <Route path="/calendar" element={<CalendarPage />} />
       <Route path="/archived" element={<UtilityPage title="Archived Classes" description="Archived classes page is now connected. Next step: teacher archive/unarchive actions from class cards." />} />
       <Route path="/settings" element={<UtilityPage title="Settings" description="Settings route is now wired. Next step: profile, notification, and account preferences." />} />
       <Route path="/help" element={<UtilityPage title="Help Center" description="Help entry point is connected. Next step: FAQs, troubleshooting, and contact support." />} />
