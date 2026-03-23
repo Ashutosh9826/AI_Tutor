@@ -1,91 +1,78 @@
-# Project Context (Primary Handoff File)
+# PROJECT_CONTEXT
 
-Use this file as the first read for any new AI session.
+Read this first in every new AI session.
 
-## Context Rules
+## Goal
+- Build AI-powered classroom app: classes, lessons, live teaching, assignments, attendance.
+- Keep teacher workflows fast; student workflows simple and safe.
 
-1. Keep this file short and operational.
-2. Do not paste large logs, stack traces, or long code blocks.
-3. Prefer bullets and concrete next actions.
-4. At session end, update only:
-   - `Current Snapshot`
-   - `Next Actions`
-   - one new `Session Log` entry
-5. Run `npm run context:compact` after every update.
+## Stack
+- Frontend: React 19, Vite, Tailwind v4, React Router, Zustand, Axios, socket.io-client.
+- Backend: Node.js, Express, Prisma, SQLite (`backend/dev.db`), JWT auth, Socket.IO.
 
-## Size Budget
+## Roles / Permissions
+- Teacher: create/manage classes, lessons, assignments, attendance; run AI lesson tools.
+- Student: join classes, view lessons, submit assignments, view own attendance only.
+- Teacher-only gates enforced in backend for admin actions.
 
-- Hard target: under 8,000 characters.
-- Keep at most 8 recent session entries.
-- Keep each session entry to 6 bullets max.
-- Keep each bullet under 20 words.
+## Core Features (Implemented)
+- Class creation/join flow with teacher/student separation.
+- Assignment lifecycle: create, submit, grade, teacher delete.
+- Lesson lifecycle: create, edit, publish/live, teacher delete.
+- AI 3-step lesson generation:
+  - Step 1 Structure
+  - Step 2 Block Strategy
+  - Step 3 Full Lesson
+- AI per-block refinement: teacher edits one block only; other blocks untouched.
+- Live lesson sockets: quiz sync, leaderboard, chat lock/unlock, live attendance count.
 
-## Current Snapshot
+## Block UX Rules
+- `INTERACTIVE_SIMULATION`:
+  - Clean consistent layout.
+  - Built-in controls.
+  - Clear state-change visualization.
+  - Minimal config; AI-friendly generation.
+- `CODE`:
+  - In-browser notebook-like runtime.
+  - Run inside lesson; no manual setup.
+  - Library imports allowed.
+  - Output shown below code.
+  - Multiple runnable cells/sections.
+  - Sandboxed execution.
 
-- Status: core classroom flows stabilized after multiple bug fixes.
-- CODE blocks now run in-browser notebook mode with multi-cell execution.
-- Live lessons allow students to edit and run code instantly.
-- INTERACTIVE_SIMULATION blocks include built-in state visualization panels.
-- AI prompt updated to generate notebook-ready code and stateful simulations.
-- Teachers can refine any single lesson block with AI without touching other blocks.
-- AI lesson generation now uses 3-step pipeline: Structure, Block Strategy, Full Lesson.
-- Attendance module added with manual and automatic class attendance modes.
+## Attendance (Implemented)
+- Data model: `AttendanceRecord` (Prisma + DB synced).
+- Teacher manual mode: mark each student `PRESENT` / `ABSENT`.
+- Teacher automatic mode: online students `PRESENT`, others `ABSENT`.
+- Presence source: Socket.IO class presence (`join_class_presence`, `leave_class_presence`).
+- Teacher attendance UI: [PeoplePage](D:/AI_Tutor/frontend/src/pages/PeoplePage.jsx).
+- Student attendance UI: same page, read-only own records.
+- APIs: [attendance.js](D:/AI_Tutor/backend/routes/attendance.js).
 
-## Next Actions
+## Important Constraints
+- Legacy data not priority; clean foundation preferred.
+- Old/legacy assignment data can be discarded; no backward migration required.
+- Keep old design references in `docs/design_mockups_legacy/` (read-only).
+- Avoid committing generated/runtime clutter.
+- Preserve teacher/student permission boundaries.
 
-- Add backend/frontend tests for notebook cell serialization and simulation state events.
-- Verify multi-user live lesson behavior for per-student local code edits.
-- Harden sandbox policy and library allowlist decisions.
-- Add E2E smoke checks for AI-generated simulation and code blocks.
-- Add optional one-click save after per-block AI refinement.
-- Add attendance history exports and per-class monthly analytics.
+## Current Gaps / Next
+- Add tests for notebook/simulation behavior.
+- Add attendance analytics/export.
+- Add E2E smoke for AI-generated lessons and attendance flow.
+- Resolve local Vite/Tailwind oxide build environment issue if it reappears.
 
-## Decisions
-
-- `PROJECT_CONTEXT.md` is the single continuity source for AI handoff.
-- Legacy design files remain under `docs/design_mockups_legacy/` as read-only references.
-- Generated files (logs/db/dist/node_modules) must stay out of version control.
+## Context Size Rules
+- Keep file under ~3,500 chars preferred (hard max 8,000).
+- Use short bullets only; no logs, traces, long prose.
+- Keep at most 4 recent "next actions".
+- After editing, run: `npm run context:compact`.
 
 <!-- SESSION_LOG_START -->
 ## Session Log
 
-### 2026-03-23 - Attendance Feature
-- Added AttendanceRecord model, indexes, and Prisma/SQL schema updates.
-- Added teacher attendance APIs for day view, manual save, and auto-mark.
-- Added student-only API to view own attendance summary and records.
-- Added socket-based class presence tracking for online student detection.
-- Rebuilt People page into attendance dashboard for teacher/student roles.
-- Synced local SQLite with Prisma schema and regenerated Prisma client.
-
-### 2026-03-23 - 3-Step Lesson Generation
-- Replaced single-pass generation with 3 sequential AI steps.
-- Step 1 now builds lesson structure and section flow only.
-- Step 2 now assigns block strategy per section.
-- Step 3 now generates full blocks from structure and strategy.
-- Added normalization and fallback safeguards for malformed AI output.
-- Enforced required block coverage and end-of-lesson quiz placement.
-
-### 2026-03-23 - Per-Block AI Editing
-- Added teacher-only backend endpoint to refine one block via AI.
-- Enforced single-block scope and block-type schema normalization.
-- Added `lessonService.refineBlockAi` frontend API method.
-- Added per-block AI button in lesson editor block controls.
-- Added instruction modal to apply AI changes to only selected block.
-- Kept existing manual Save flow; no other blocks are modified.
-
-### 2026-03-23 - Notebook and Simulation Upgrade
-- Rebuilt CODE block into sandboxed multi-cell browser notebook runtime.
-- Added direct library imports via auto-resolved ESM package specifiers.
-- Enabled live lesson code editing for students with local state.
-- Added simulation state snapshot, timeline, and runtime notes panels.
-- Added simulation `Input JSON` editor in lesson authoring UI.
-- Updated AI generation prompt for stateful simulations and notebook code sections.
-
-### 2026-03-23 - Foundation Reset
-- Removed tracked runtime clutter: logs, lint dumps, local DB files, ad-hoc scripts.
-- Removed local dependency/build folders to reset clean workspace state.
-- Moved old root docs into `docs/archive`.
-- Moved `design_mockups` into `docs/design_mockups_legacy`.
-- Added root `.gitignore`, root `README.md`, and workspace `package.json`.
-- Added context compaction workflow with `scripts/compact-context.mjs`.
+### 2026-03-23 - Compact Handoff Reset
+- Rewrote context into minimal resumable format.
+- Preserved required blocks: goal, stack, roles, features, attendance, constraints.
+- Kept rules optimized for low token transfer.
 <!-- SESSION_LOG_END -->
