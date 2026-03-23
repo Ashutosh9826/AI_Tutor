@@ -3,334 +3,23 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { lessonService } from '../services/api';
 import useAuthStore from '../store/useAuthStore';
 import InteractiveSimulationBlock from '../components/InteractiveSimulationBlock';
+import CodeNotebookBlock from '../components/CodeNotebookBlock';
 
 // Simple ID generator for local new blocks
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-const SIMULATION_TYPES = [
-  'FLOWCHART',
-  'GRAPH',
-  'TREE',
-  'STATE_MACHINE',
-  'STEP_PROCESS',
-  'ALGORITHM',
-  'TIMELINE',
-  'DECISION_DIAGRAM',
-  'DP_TABLE',
-  'RECURSION_TREE',
-  'SYSTEM_ARCHITECTURE',
-];
-
-const DEFAULT_SIMULATION_SANDBOX_CODE = `const { input, helpers } = context;
-
-const rawNodes = Array.isArray(input.nodes) && input.nodes.length > 0
-  ? input.nodes
-  : [
-      { id: '1', label: '1', caption: 'a', role: 'source', x: 0.12, y: 0.78 },
-      { id: '2', label: '2', x: 0.42, y: 0.82 },
-      { id: '3', label: '3', x: 0.40, y: 0.50 },
-      { id: '4', label: '4', x: 0.88, y: 0.48 },
-      { id: '5', label: '5', caption: 'b', x: 0.55, y: 0.16 },
-      { id: '6', label: '6', x: 0.17, y: 0.24 },
-    ];
-
-const nodes = rawNodes.map((node, index) => {
-  if (typeof node === 'string' || typeof node === 'number') {
-    const id = String(node);
-    return {
-      id,
-      label: id,
-      caption: '',
-      x: 0.12 + (index % 3) * 0.35,
-      y: 0.2 + Math.floor(index / 3) * 0.3,
-    };
-  }
-  const id = String(node.id ?? node.label ?? index + 1);
-  return {
-    id,
-    label: String(node.label ?? id),
-    caption: String(node.caption ?? ''),
-    role: String(node.role ?? ''),
-    x: typeof node.x === 'number' ? node.x : 0.5,
-    y: typeof node.y === 'number' ? node.y : 0.5,
-  };
-});
-
-const edgeList = Array.isArray(input.edges) && input.edges.length > 0
-  ? input.edges
-  : [
-      { from: '1', to: '2', weight: 7 },
-      { from: '1', to: '3', weight: 9 },
-      { from: '1', to: '6', weight: 14 },
-      { from: '2', to: '3', weight: 10 },
-      { from: '2', to: '4', weight: 15 },
-      { from: '3', to: '4', weight: 11 },
-      { from: '3', to: '6', weight: 2 },
-      { from: '4', to: '5', weight: 6 },
-      { from: '5', to: '6', weight: 9 },
-    ];
-
-const start = String(input.start || nodes[0].id);
-const target = String(input.target || nodes[nodes.length - 1].id);
-
-const adjacency = new Map();
-nodes.forEach((node) => adjacency.set(node.id, []));
-edgeList.forEach((edge) => {
-  const from = String(edge.from);
-  const to = String(edge.to);
-  const weight = Number(edge.weight ?? 0);
-  if (!adjacency.has(from)) adjacency.set(from, []);
-  if (!adjacency.has(to)) adjacency.set(to, []);
-  adjacency.get(from).push({ from, to, weight });
-  if (edge.bidirectional !== false) {
-    adjacency.get(to).push({ from: to, to: from, weight });
-  }
-});
-
-const distances = {};
-const previous = {};
-const visited = new Set();
-nodes.forEach((node) => {
-  distances[node.id] = Infinity;
-  previous[node.id] = null;
-});
-distances[start] = 0;
-
-const steps = [];
-steps.push({
-  title: 'Initialize Distances',
-  explanation: 'Set all node distances to Infinity except the source node.',
-  activeNodes: [start],
-  activeEdges: [],
-  stateValues: {
-    start,
-    target,
-    distances: { ...distances },
-    visited: [],
-  },
-});
-
-while (visited.size < nodes.length) {
-  let current = null;
-  let bestDistance = Infinity;
-
-  nodes.forEach((node) => {
-    if (!visited.has(node.id) && distances[node.id] < bestDistance) {
-      bestDistance = distances[node.id];
-      current = node.id;
-    }
-  });
-
-  if (!current || bestDistance === Infinity) break;
-  visited.add(current);
-
-  steps.push({
-    title: 'Visit ' + current,
-    explanation: 'Select the unvisited node with the smallest tentative distance.',
-    activeNodes: [current],
-    activeEdges: [],
-    stateValues: {
-      current,
-      distances: { ...distances },
-      visited: [...visited],
-    },
-  });
-
-  const neighbors = adjacency.get(current) || [];
-  neighbors.forEach((edge) => {
-    const nextDistance = distances[current] + edge.weight;
-    if (nextDistance < (distances[edge.to] ?? Infinity)) {
-      distances[edge.to] = nextDistance;
-      previous[edge.to] = current;
-
-      steps.push({
-        title: 'Relax ' + edge.from + ' -> ' + edge.to,
-        explanation: 'Update shortest-known distance to node ' + edge.to + '.',
-        activeNodes: [edge.from, edge.to],
-        activeEdges: [helpers.edgeId(edge.from, edge.to)],
-        stateValues: {
-          current,
-          updatedNode: edge.to,
-          distances: { ...distances },
-          visited: [...visited],
-        },
-      });
-    }
-  });
-}
-
-const path = [];
-let cursor = target;
-while (cursor) {
-  path.unshift(cursor);
-  cursor = previous[cursor];
-}
-
-const pathEdges = [];
-for (let i = 0; i < path.length - 1; i += 1) {
-  pathEdges.push(helpers.edgeId(path[i], path[i + 1]));
-}
-
-if (path.length > 1 && path[0] === start) {
-  steps.push({
-    title: 'Shortest Path Found',
-    explanation: 'Backtrack predecessor links to show the final shortest route.',
-    activeNodes: path,
-    activeEdges: pathEdges,
-    annotation: "That's all!",
-    stateValues: {
-      path,
-      totalCost: distances[target],
-      visited: [...visited],
-      distances: { ...distances },
-      message: "That's all!",
-    },
-  });
-}
-
-return {
-  title: 'Dijkstra Interactive Animation',
-  diagramType: 'GRAPH',
-  description: 'Video-style shortest-path visualization with distance labels and Out states.',
-  hint: 'Red nodes are finalized (Out). Blue values show current best distances.',
-  solutionText:
-    path.length > 1 && path[0] === start
-      ? 'Shortest path to ' + target + ': ' + path.join(' -> ') + ' (cost ' + distances[target] + ')'
-      : 'No path found from ' + start + ' to ' + target + '.',
-  canvas: { width: 560, height: 400, nodeRadius: 18, padding: 28 },
-  nodes,
-  edges: edgeList.map((edge) => ({
-    id: helpers.edgeId(String(edge.from), String(edge.to)),
-    from: String(edge.from),
-    to: String(edge.to),
-    label: String(edge.weight ?? ''),
-  })),
-  steps,
-};`;
-
 const defaultSimulationContent = () => ({
-  title: 'Interactive Simulation Sandbox',
-  diagramType: 'GRAPH',
-  description: 'Programmable simulation environment. AI can generate code to create dynamic steps and visuals.',
-  hint: 'Use Step controls to inspect each transition.',
-  sandbox: {
-    enabled: true,
-    inputJson: JSON.stringify(
-      {
-        start: '1',
-        target: '5',
-        nodes: [
-          { id: '1', label: '1', caption: 'a', role: 'source', x: 0.12, y: 0.78 },
-          { id: '2', label: '2', x: 0.42, y: 0.82 },
-          { id: '3', label: '3', x: 0.40, y: 0.50 },
-          { id: '4', label: '4', x: 0.88, y: 0.48 },
-          { id: '5', label: '5', caption: 'b', x: 0.55, y: 0.16 },
-          { id: '6', label: '6', x: 0.17, y: 0.24 },
-        ],
-        edges: [
-          { from: '1', to: '2', weight: 7 },
-          { from: '1', to: '3', weight: 9 },
-          { from: '1', to: '6', weight: 14 },
-          { from: '2', to: '3', weight: 10 },
-          { from: '2', to: '4', weight: 15 },
-          { from: '3', to: '4', weight: 11 },
-          { from: '3', to: '6', weight: 2 },
-          { from: '4', to: '5', weight: 6 },
-          { from: '5', to: '6', weight: 9 },
-        ],
-      },
-      null,
-      2
-    ),
-    code: DEFAULT_SIMULATION_SANDBOX_CODE,
-  },
-  nodes: [
-    { id: 'start', label: 'Start' },
-    { id: 'process', label: 'Process' },
-    { id: 'finish', label: 'Finish' },
-  ],
-  edges: [
-    { from: 'start', to: 'process', label: 'next' },
-    { from: 'process', to: 'finish', label: 'done' },
-  ],
-  table: [],
-  steps: [
-    {
-      title: 'Sandbox Ready',
-      explanation: 'Run the script to generate dynamic simulation steps.',
-      activeNodes: ['start'],
-      activeEdges: [],
-      stateValues: { status: 'ready' },
-    },
-  ],
-  solutionText: 'Use sandbox code to compute and explain the final state.',
+  title: 'Interactive Simulation',
+  description: 'Describe what this simulation teaches.',
+  hint: '',
+  solutionText: '',
+  html: '<div id="app"></div>',
+  css: '',
+  js: '// Simulation code — use context.app, context.input, context.helpers\nconst { app, helpers } = context;\napp.innerHTML = "<h3>Hello Simulation!</h3><p>Edit the code to build your visualization.</p>";',
+  libs: [],
+  height: 420,
+  inputJson: '{}',
 });
-
-const nodesToText = (nodes = []) =>
-  nodes.map((node) => `${node.id || ''}|${node.label || ''}`).join('\n');
-
-const edgesToText = (edges = []) =>
-  edges.map((edge) => `${edge.from || ''}->${edge.to || ''}|${edge.label || ''}`).join('\n');
-
-const parseNodesText = (text = '') =>
-  text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [id = '', label = ''] = line.split('|');
-      return { id: id.trim(), label: label.trim() || id.trim() };
-    })
-    .filter((node) => node.id);
-
-const parseEdgesText = (text = '') =>
-  text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [path = '', label = ''] = line.split('|');
-      const [from = '', to = ''] = path.split('->');
-      return { from: from.trim(), to: to.trim(), label: label.trim() };
-    })
-    .filter((edge) => edge.from && edge.to);
-
-const stateValuesToText = (values = {}) =>
-  Object.entries(values)
-    .map(([key, value]) => `${key}=${typeof value === 'object' ? JSON.stringify(value) : value}`)
-    .join('\n');
-
-const parseStateValuesText = (text = '') => {
-  const result = {};
-  text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .forEach((line) => {
-      const [rawKey, ...rawValue] = line.split('=');
-      const key = (rawKey || '').trim();
-      if (!key) return;
-      const valueText = rawValue.join('=').trim();
-      if (valueText === '') {
-        result[key] = '';
-        return;
-      }
-      if (!Number.isNaN(Number(valueText)) && valueText !== '') {
-        result[key] = Number(valueText);
-        return;
-      }
-      if (valueText === 'true' || valueText === 'false') {
-        result[key] = valueText === 'true';
-        return;
-      }
-      try {
-        result[key] = JSON.parse(valueText);
-      } catch {
-        result[key] = valueText;
-      }
-    });
-  return result;
-};
 
 export default function LessonEditor() {
   const location = useLocation();
@@ -350,24 +39,7 @@ export default function LessonEditor() {
   // AI Assistant menu toggle
   const [showAiMenu, setShowAiMenu] = useState(false);
   
-  // Code execution state
-  const [codeOutputs, setCodeOutputs] = useState({});
-
-  const handleRunCode = (localId, code) => {
-    try {
-      let output = '';
-      const originalLog = console.log;
-      console.log = (...args) => {
-        output += args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ') + '\n';
-      };
-      // eslint-disable-next-line no-eval
-      eval(code);
-      console.log = originalLog;
-      setCodeOutputs(prev => ({ ...prev, [localId]: output || 'Done (no output)' }));
-    } catch (err) {
-      setCodeOutputs(prev => ({ ...prev, [localId]: `Error: ${err.message}` }));
-    }
-  };
+  // Code execution is now handled inside CodeNotebookBlock (sandboxed iframe)
 
   useEffect(() => {
     if (!user) {
@@ -438,7 +110,6 @@ export default function LessonEditor() {
       });
       
       setLesson(updatedLesson);
-      // alert('Saved successfully!');
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to save lesson');
       console.error(err);
@@ -500,31 +171,14 @@ export default function LessonEditor() {
     
     if (block.type === 'CODE') {
       return (
-        <section key={block.localId} className="group relative bg-[#1c1f21] text-secondary-fixed rounded-xl p-8 font-mono text-sm transition-all hover:shadow-xl notebook-line border-l-2 border-transparent hover:border-l-primary mb-8">
+        <section key={block.localId} className="group relative mb-8">
           <BlockControls index={index} localId={block.localId} dark />
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-2 text-outline-variant text-xs font-bold tracking-widest uppercase">
-              <span className="material-symbols-outlined text-sm">code</span> Code Snippet
-            </div>
-            <button onClick={() => handleRunCode(block.localId, block.content)} className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors" type="button"><span className="material-symbols-outlined text-sm">play_arrow</span> RUN</button>
-          </div>
-          <textarea
-            className="w-full text-primary-fixed bg-transparent resize-y outline-none font-mono"
-            placeholder="# Write python code here..."
-            rows={6}
-            value={block.content}
-            onChange={(e) => updateBlock(block.localId, e.target.value)}
-            spellCheck={false}
+          <CodeNotebookBlock
+            code={block.content}
+            onChange={(v) => updateBlock(block.localId, v)}
+            editable
+            blockId={block.localId}
           />
-          {codeOutputs[block.localId] && (
-            <div className="mt-4 p-4 bg-black/40 rounded-lg border border-white/5 font-mono text-xs text-secondary-fixed-dim">
-              <div className="flex justify-between items-center mb-2">
-                <div className="text-[10px] font-bold text-outline-variant uppercase">Output:</div>
-                <button onClick={() => setCodeOutputs(prev => ({ ...prev, [block.localId]: null }))} className="text-[10px] uppercase text-error hover:text-error/80">Clear</button>
-              </div>
-              <pre className="whitespace-pre-wrap">{codeOutputs[block.localId]}</pre>
-            </div>
-          )}
         </section>
       );
     }
@@ -676,51 +330,9 @@ export default function LessonEditor() {
 
     if (block.type === 'INTERACTIVE_SIMULATION') {
       const simData = typeof block.content === 'object' ? block.content : defaultSimulationContent();
-      const steps = simData.steps || [];
       const updateSimulation = (changes) => updateBlock(block.localId, { ...simData, ...changes });
-      const updateSimulationStep = (stepIndex, changes) => {
-        const nextSteps = [...steps];
-        nextSteps[stepIndex] = { ...nextSteps[stepIndex], ...changes };
-        updateSimulation({ steps: nextSteps });
-      };
-      const sandbox = simData.sandbox && typeof simData.sandbox === 'object' ? simData.sandbox : {};
-      const sandboxEnabled = Boolean(sandbox.enabled);
-      const updateSandbox = (changes) =>
-        updateSimulation({
-          sandbox: { ...sandbox, ...changes },
-        });
-      const loadDefaultSandboxTemplate = () =>
-        updateSandbox({
-          enabled: true,
-          code: DEFAULT_SIMULATION_SANDBOX_CODE,
-          inputJson: JSON.stringify(
-            {
-              start: '1',
-              target: '5',
-              nodes: [
-                { id: '1', label: '1', caption: 'a', role: 'source', x: 0.12, y: 0.78 },
-                { id: '2', label: '2', x: 0.42, y: 0.82 },
-                { id: '3', label: '3', x: 0.40, y: 0.50 },
-                { id: '4', label: '4', x: 0.88, y: 0.48 },
-                { id: '5', label: '5', caption: 'b', x: 0.55, y: 0.16 },
-                { id: '6', label: '6', x: 0.17, y: 0.24 },
-              ],
-              edges: [
-                { from: '1', to: '2', weight: 7 },
-                { from: '1', to: '3', weight: 9 },
-                { from: '1', to: '6', weight: 14 },
-                { from: '2', to: '3', weight: 10 },
-                { from: '2', to: '4', weight: 15 },
-                { from: '3', to: '4', weight: 11 },
-                { from: '3', to: '6', weight: 2 },
-                { from: '4', to: '5', weight: 6 },
-                { from: '5', to: '6', weight: 9 },
-              ],
-            },
-            null,
-            2
-          ),
-        });
+      const libsToText = (libs) => (Array.isArray(libs) ? libs.join('\n') : '');
+      const parseLibsText = (text) => text.split('\n').map(s => s.trim()).filter(Boolean);
 
       return (
         <section key={block.localId} className="group relative bg-surface-container-lowest rounded-xl p-8 transition-all hover:shadow-lg notebook-line border-l-2 border-transparent hover:border-l-primary mb-8">
@@ -729,253 +341,59 @@ export default function LessonEditor() {
             <span className="material-symbols-outlined text-sm">experiment</span> Interactive Simulation
           </div>
 
+          {/* Title & Height */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Title</label>
-              <input
-                type="text"
-                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                value={simData.title || ''}
-                onChange={(e) => updateSimulation({ title: e.target.value })}
-              />
+              <input type="text" className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary" value={simData.title || ''} onChange={(e) => updateSimulation({ title: e.target.value })} />
             </div>
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Diagram Type</label>
-              <select
-                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                value={simData.diagramType || 'FLOWCHART'}
-                onChange={(e) => updateSimulation({ diagramType: e.target.value })}
-              >
-                {SIMULATION_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Height (px)</label>
+              <input type="number" min={280} className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary" value={Number(simData.height) > 0 ? Number(simData.height) : 420} onChange={(e) => updateSimulation({ height: Number(e.target.value) || 420 })} />
             </div>
           </div>
 
+          {/* Description, Hint, Solution */}
           <div className="space-y-4 mb-6">
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Description</label>
-              <textarea
-                rows={2}
-                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary resize-y"
-                value={simData.description || ''}
-                onChange={(e) => updateSimulation({ description: e.target.value })}
-              />
+              <textarea rows={2} className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary resize-y" value={simData.description || ''} onChange={(e) => updateSimulation({ description: e.target.value })} />
             </div>
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Hint</label>
-              <input
-                type="text"
-                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                value={simData.hint || ''}
-                onChange={(e) => updateSimulation({ hint: e.target.value })}
-              />
+              <input type="text" className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary" value={simData.hint || ''} onChange={(e) => updateSimulation({ hint: e.target.value })} />
             </div>
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Solution Text</label>
-              <textarea
-                rows={2}
-                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary resize-y"
-                value={simData.solutionText || ''}
-                onChange={(e) => updateSimulation({ solutionText: e.target.value })}
-              />
+              <textarea rows={2} className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary resize-y" value={simData.solutionText || ''} onChange={(e) => updateSimulation({ solutionText: e.target.value })} />
             </div>
           </div>
 
-          <div className="mb-6 rounded-xl border border-outline-variant/25 bg-surface-container-low p-4 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-outline">Programmable Sandbox</p>
-                <p className="text-xs text-outline mt-1">
-                  Let AI or teachers write JavaScript that returns the full simulation object.
-                </p>
-              </div>
-              <label className="inline-flex items-center gap-2 text-xs font-semibold text-on-surface">
-                <input
-                  type="checkbox"
-                  checked={sandboxEnabled}
-                  onChange={(e) => updateSandbox({ enabled: e.target.checked })}
-                  className="accent-primary"
-                />
-                Enable runtime
-              </label>
+          {/* Canvas Code Editors */}
+          <div className="rounded-xl border border-outline-variant/25 bg-surface-container-low p-4 space-y-4 mb-6">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-outline">Canvas Code</p>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">HTML Markup</label>
+              <textarea rows={5} className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y" value={typeof simData.html === 'string' ? simData.html : ''} onChange={(e) => updateSimulation({ html: e.target.value })} spellCheck={false} />
             </div>
-
-            {sandboxEnabled && (
-              <>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">
-                    Input JSON
-                  </label>
-                  <textarea
-                    rows={6}
-                    className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
-                    placeholder='{"start":"A","target":"E","nodes":[],"edges":[]}'
-                    value={typeof sandbox.inputJson === 'string' ? sandbox.inputJson : '{}'}
-                    onChange={(e) => updateSandbox({ inputJson: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">
-                    Sandbox Script (must return a simulation object)
-                  </label>
-                  <textarea
-                    rows={14}
-                    className="w-full bg-[#1c1f21] text-slate-100 border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
-                    value={typeof sandbox.code === 'string' ? sandbox.code : ''}
-                    onChange={(e) => updateSandbox({ code: e.target.value })}
-                    spellCheck={false}
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={loadDefaultSandboxTemplate}
-                    className="text-xs font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 rounded-lg"
-                  >
-                    Load Dijkstra template
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateSandbox({ code: '' })}
-                    className="text-xs font-semibold text-error border border-error/30 bg-error/5 hover:bg-error/10 px-3 py-1.5 rounded-lg"
-                  >
-                    Clear script
-                  </button>
-                </div>
-                <p className="text-[11px] text-outline">
-                  Script entrypoint: use <code>context.input</code> and <code>context.helpers</code>, then{' '}
-                  <code>return {'{ ... }'}</code> with fields like <code>nodes</code>, <code>edges</code>,{' '}
-                  <code>steps</code>, <code>table</code>, <code>timeline</code>, <code>description</code>, and{' '}
-                  <code>solutionText</code>.
-                </p>
-              </>
-            )}
-          </div>
-
-          <details className="mb-6 rounded-xl border border-outline-variant/20 bg-surface-container-low p-4" open={!sandboxEnabled}>
-            <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-widest text-outline">
-              Manual Step Authoring (Optional Fallback)
-            </summary>
-            <p className="text-xs text-outline mt-2 mb-4">
-              Use this when you want static steps. If sandbox runtime is enabled, these fields act as a fallback.
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">CSS Styles</label>
+              <textarea rows={5} className="w-full bg-[#1c1f21] text-slate-100 border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y" value={typeof simData.css === 'string' ? simData.css : ''} onChange={(e) => updateSimulation({ css: e.target.value })} spellCheck={false} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">JavaScript</label>
+              <textarea rows={12} className="w-full bg-[#1c1f21] text-slate-100 border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y" value={typeof simData.js === 'string' ? simData.js : ''} onChange={(e) => updateSimulation({ js: e.target.value })} spellCheck={false} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">External Libraries (one URL per line)</label>
+              <textarea rows={2} className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y" placeholder="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js" value={libsToText(simData.libs)} onChange={(e) => updateSimulation({ libs: parseLibsText(e.target.value) })} />
+            </div>
+            <p className="text-[11px] text-outline">
+              Use <code>context.app</code>, <code>context.input</code>, and <code>context.helpers</code> in your JavaScript.
             </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Nodes (id|label per line)</label>
-                <textarea
-                  rows={5}
-                  className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
-                  value={nodesToText(simData.nodes)}
-                  onChange={(e) => updateSimulation({ nodes: parseNodesText(e.target.value) })}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Edges (from-&gt;to|label per line)</label>
-                <textarea
-                  rows={5}
-                  className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
-                  value={edgesToText(simData.edges)}
-                  onChange={(e) => updateSimulation({ edges: parseEdgesText(e.target.value) })}
-                />
-              </div>
-            </div>
-
-          <div className="mb-6 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-outline">Steps</p>
-              <button
-                type="button"
-                onClick={() =>
-                  updateSimulation({
-                    steps: [
-                      ...steps,
-                      {
-                        title: `Step ${steps.length + 1}`,
-                        explanation: '',
-                        activeNodes: [],
-                        activeEdges: [],
-                        stateValues: {},
-                      },
-                    ],
-                  })
-                }
-                className="text-xs font-semibold text-primary hover:bg-primary/5 px-2 py-1 rounded-lg"
-              >
-                + Add Step
-              </button>
-            </div>
-
-            {steps.map((step, stepIndex) => (
-              <div key={`${block.localId}-step-${stepIndex}`} className="rounded-xl border border-outline-variant/25 p-3 bg-surface-container-low space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-on-surface">Step {stepIndex + 1}</p>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateSimulation({
-                        steps: steps.filter((_, idx) => idx !== stepIndex),
-                      })
-                    }
-                    className="text-xs text-error hover:bg-error/10 px-2 py-1 rounded-lg"
-                  >
-                    Remove
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-                  placeholder="Step title"
-                  value={step.title || ''}
-                  onChange={(e) => updateSimulationStep(stepIndex, { title: e.target.value })}
-                />
-                <textarea
-                  rows={2}
-                  className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary resize-y"
-                  placeholder="Step explanation"
-                  value={step.explanation || ''}
-                  onChange={(e) => updateSimulationStep(stepIndex, { explanation: e.target.value })}
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <input
-                    type="text"
-                    className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs outline-none focus:border-primary"
-                    placeholder="Active nodes (comma separated)"
-                    value={(step.activeNodes || []).join(', ')}
-                    onChange={(e) =>
-                      updateSimulationStep(stepIndex, {
-                        activeNodes: e.target.value.split(',').map((v) => v.trim()).filter(Boolean),
-                      })
-                    }
-                  />
-                  <input
-                    type="text"
-                    className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs outline-none focus:border-primary"
-                    placeholder="Active edges (comma separated)"
-                    value={(step.activeEdges || []).join(', ')}
-                    onChange={(e) =>
-                      updateSimulationStep(stepIndex, {
-                        activeEdges: e.target.value.split(',').map((v) => v.trim()).filter(Boolean),
-                      })
-                    }
-                  />
-                </div>
-                <textarea
-                  rows={3}
-                  className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
-                  placeholder="State values (key=value per line)"
-                  value={stateValuesToText(step.stateValues || {})}
-                  onChange={(e) => updateSimulationStep(stepIndex, { stateValues: parseStateValuesText(e.target.value) })}
-                />
-              </div>
-            ))}
           </div>
-          </details>
 
+          {/* Preview */}
           <div className="rounded-xl border border-outline-variant/20 p-4 bg-surface-container-low">
             <p className="text-[10px] font-bold uppercase tracking-widest text-outline mb-3">Preview</p>
             <InteractiveSimulationBlock block={{ ...block, content: simData }} compact />
@@ -1105,7 +523,7 @@ export default function LessonEditor() {
             <p className="text-xs font-bold text-primary mb-2">ADD BLOCK</p>
             <div className="grid grid-cols-1 gap-2">
               <button onClick={() => addBlock('TEXT')} className="text-sm text-left px-3 py-2 rounded-lg bg-surface-container hover:bg-primary/10 transition-colors font-medium flex items-center gap-2"><span className="material-symbols-outlined text-sm">subject</span> Explanation</button>
-              <button onClick={() => addBlock('CODE')} className="text-sm text-left px-3 py-2 rounded-lg bg-surface-container hover:bg-primary/10 transition-colors font-medium flex items-center gap-2"><span className="material-symbols-outlined text-sm">code</span> Python Script</button>
+              <button onClick={() => addBlock('CODE')} className="text-sm text-left px-3 py-2 rounded-lg bg-surface-container hover:bg-primary/10 transition-colors font-medium flex items-center gap-2"><span className="material-symbols-outlined text-sm">code</span> Code Cell</button>
               <button onClick={() => addBlock('EXERCISE')} className="text-sm text-left px-3 py-2 rounded-lg bg-surface-container hover:bg-primary/10 transition-colors font-medium flex items-center gap-2"><span className="material-symbols-outlined text-sm">menu_book</span> Exercise MCQ</button>
               <button onClick={() => addBlock('QUIZ')} className="text-sm text-left px-3 py-2 rounded-lg bg-surface-container hover:bg-primary/10 transition-colors font-medium flex items-center gap-2"><span className="material-symbols-outlined text-sm">quiz</span> Quick Quiz</button>
               <button onClick={() => addBlock('WRITTEN_QUIZ')} className="text-sm text-left px-3 py-2 rounded-lg bg-surface-container hover:bg-primary/10 transition-colors font-medium flex items-center gap-2"><span className="material-symbols-outlined text-sm">edit_document</span> Written Quiz</button>

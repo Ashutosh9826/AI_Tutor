@@ -57,32 +57,32 @@ router.post('/generate', authenticateToken, requireTeacher, async (req, res) => 
     
     The lesson should have a mix of the following block types:
     1. 'TEXT': Thorough explanations with clear headings.
-    2. 'CODE': Working code examples (mostly JavaScript/Python style for this demo).
+    2. 'CODE': Working JavaScript code examples. The content is a plain string of JavaScript code that students can run in a sandboxed notebook cell.
     3. 'EXERCISE': Individual 'Check for Understanding' MCQ questions. These should be placed mid-content. EACH option must include a 'feedback' string explaining why it is correct or incorrect.
     4. 'QUIZ': A set of 3-5 challenging questions for the END of the lesson (this will be the live competitive part).
     5. 'DISCUSSION': Thought-provoking prompts.
-    6. 'INTERACTIVE_SIMULATION': A general programmable simulation sandbox block where JavaScript code returns interactive states/steps, visuals, and explanations.
+    6. 'INTERACTIVE_SIMULATION': A canvas-sandbox simulation block that runs HTML/CSS/JS inside an isolated iframe.
        - Use this for algorithms, flowcharts, graphs, trees, state machines, timelines, DP tables, recursion trees, architecture diagrams, and any process animation.
-       - Content schema for this block should be a JSON object with:
+       - The content is a FLAT object with these fields:
          {
            "title": "Simulation title",
-           "diagramType": "GRAPH | FLOWCHART | TREE | STATE_MACHINE | STEP_PROCESS | ALGORITHM | TIMELINE | DECISION_DIAGRAM | DP_TABLE | RECURSION_TREE | SYSTEM_ARCHITECTURE",
            "description": "What this simulation teaches",
            "hint": "Guidance for students",
            "solutionText": "Expected insight or final result",
-           "sandbox": {
-             "enabled": true,
-	             "inputJson": "{\"key\":\"value\"}",
-             "code": "JavaScript function body that uses context.input/context.helpers and RETURNS a simulation object."
-           }
+           "html": "<div id=\\"app\\"></div>",
+           "css": "/* custom CSS styles */",
+           "js": "const { app, input, helpers } = context;\\n// Browser JS code that renders the simulation into context.app",
+           "libs": ["https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"],
+           "height": 420,
+           "inputJson": "{\\"key\\":\\"value\\"}"
          }
-       - The returned simulation object from sandbox code can include:
-         nodes, edges, steps, table, timeline, description, hint, solutionText, title, diagramType.
+       - The JS code receives a \`context\` object with: app (DOM element), input (parsed inputJson), helpers (clamp, lerp, range, wait, el).
        - Keep code safe, deterministic, and classroom-appropriate.
+       - DO NOT use canvasSandbox, sandbox, diagramType, nodes, edges, or steps fields — those are deprecated.
 
     Target Audience: ${gradeLevel || 'High School / College'}
     Estimated Time: ${targetDuration || '30'} minutes.
-    ${referenceContent ? `Reference Content to use: ${referenceContent}` : ''}
+    ${referenceContent ? 'Reference Content to use: ' + referenceContent : ''}
 
     JSON Structure Example:
     {
@@ -90,8 +90,8 @@ router.post('/generate', authenticateToken, requireTeacher, async (req, res) => 
       "blocks": [
         { "type": "TEXT", "content": "Markdown text..." },
         { "type": "EXERCISE", "content": { "question": "...", "options": [{ "text": "...", "isCorrect": true, "feedback": "..." }] } },
-        { "type": "CODE", "content": "..." },
-	        { "type": "INTERACTIVE_SIMULATION", "content": { "title": "...", "diagramType": "GRAPH", "sandbox": { "enabled": true, "inputJson": "{\"start\":\"A\"}", "code": "const { input, helpers } = context; return { nodes: [], edges: [], steps: [] };" } } },
+        { "type": "CODE", "content": "console.log('Hello world!');" },
+        { "type": "INTERACTIVE_SIMULATION", "content": { "title": "...", "description": "...", "hint": "...", "solutionText": "...", "html": "<div id=\\"app\\"></div>", "css": "", "js": "const { app, input, helpers } = context;\\napp.innerHTML = '<h3>Interactive Simulation</h3>';", "libs": [], "height": 420, "inputJson": "{}" } },
         { "type": "QUIZ", "content": { "question": "...", "options": [...] } }
       ]
     }

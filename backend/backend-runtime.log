@@ -55,3 +55,81 @@ requireTeacher check: {
   iat: 1774269298,
   exp: 1774355698
 }
+requireTeacher check: {
+  userId: '915a93d5-a01b-4f97-9262-6f219f002023',
+  role: 'TEACHER',
+  iat: 1774270738,
+  exp: 1774357138
+}
+AI Generation Error: TypeError: terminated
+    at Fetch.onAborted (node:internal/deps/undici/undici:12826:53)
+    at Fetch.emit (node:events:508:28)
+    at Fetch.terminate (node:internal/deps/undici/undici:11963:14)
+    at Object.onError (node:internal/deps/undici/undici:12950:38)
+    at Request.onError (node:internal/deps/undici/undici:3015:31)
+    at Object.errorRequest (node:internal/deps/undici/undici:1887:17)
+    at TLSSocket.onHttpSocketClose (node:internal/deps/undici/undici:7661:14)
+    at TLSSocket.emit (node:events:520:35)
+    at node:net:346:12
+    at TCP.done (node:internal/tls/wrap:667:7) {
+  [cause]: SocketError: other side closed
+      at TLSSocket.onHttpSocketEnd (node:internal/deps/undici/undici:7635:26)
+      at TLSSocket.emit (node:events:520:35)
+      at endReadableNT (node:internal/streams/readable:1729:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+    code: 'UND_ERR_SOCKET',
+    socket: {
+      localAddress: '192.168.107.130',
+      localPort: 49821,
+      remoteAddress: '104.18.2.115',
+      remotePort: 443,
+      remoteFamily: 'IPv4',
+      timeout: undefined,
+      bytesWritten: 6193,
+      bytesRead: 7383
+    }
+  }
+}
+requireTeacher check: {
+  userId: '915a93d5-a01b-4f97-9262-6f219f002023',
+  role: 'TEACHER',
+  iat: 1774270738,
+  exp: 1774357138
+}
+AI Generation Error: SyntaxError: Expected double-quoted property name in JSON at position 1667 (line 7 column 5)
+    at JSON.parse (<anonymous>)
+    at D:\AI_Tutor\backend\routes\lessons.js:129:29
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+requireTeacher check: {
+  userId: '915a93d5-a01b-4f97-9262-6f219f002023',
+  role: 'TEACHER',
+  iat: 1774270738,
+  exp: 1774357138
+}
+requireTeacher check: {
+  userId: '915a93d5-a01b-4f97-9262-6f219f002023',
+  role: 'TEACHER',
+  iat: 1774270738,
+  exp: 1774357138
+}
+requireTeacher check: {
+  userId: '915a93d5-a01b-4f97-9262-6f219f002023',
+  role: 'TEACHER',
+  iat: 1774270738,
+  exp: 1774357138
+}
+requireTeacher check: {
+  userId: '915a93d5-a01b-4f97-9262-6f219f002023',
+  role: 'TEACHER',
+  iat: 1774270738,
+  exp: 1774357138
+}
+requireTeacher check: {
+  userId: '915a93d5-a01b-4f97-9262-6f219f002023',
+  role: 'TEACHER',
+  iat: 1774270738,
+  exp: 1774357138
+}
+A user connected: G2eZCMV7N2L1plOLAAAF
+User G2eZCMV7N2L1plOLAAAF joined lesson decbb43a-1655-48d0-98cd-8c803aff58aa
+User disconnected: G2eZCMV7N2L1plOLAAAF

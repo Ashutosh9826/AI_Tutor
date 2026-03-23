@@ -7,7 +7,8 @@ import ChatAssistant from '../components/ChatAssistant';
 import InteractiveQuiz from '../components/InteractiveQuiz';
 import WrittenQuiz from '../components/WrittenQuiz';
 import InteractiveSimulationBlock from '../components/InteractiveSimulationBlock';
-import TeacherControlPanel from '../components/TeacherControlPanel'; // 1. Import TeacherControlPanel
+import CodeNotebookBlock from '../components/CodeNotebookBlock';
+import TeacherControlPanel from '../components/TeacherControlPanel';
 
 const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
 
@@ -32,7 +33,7 @@ export default function LiveLessonView() {
   const [activeQuizzes, setActiveQuizzes] = useState({});
   // quizResults: { [blockId]: { [optionIdx]: count } }
   const [quizResults, setQuizResults] = useState({});
-  const [codeOutputs, setCodeOutputs] = useState({});
+  // Code execution is now self-contained within CodeNotebookBlock (sandboxed iframe)
   const [exerciseStates, setExerciseStates] = useState({}); // { [blockId]: { selectedIndex, submitted: boolean } }
   const [leaderboard, setLeaderboard] = useState({}); // { [userId]: { name, score, count } }
   const [quizPhase, setQuizPhase] = useState('CONTENT'); // 'CONTENT', 'COMPETITION', 'RANKING'
@@ -251,25 +252,7 @@ export default function LiveLessonView() {
     });
   };
 
-  const handleRunCode = (blockId, code) => {
-    try {
-      // Capture console.log
-      let output = '';
-      const originalLog = console.log;
-      console.log = (...args) => {
-        output += args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ') + '\n';
-      };
-      
-      // Execute code (simplified for JS)
-      // eslint-disable-next-line no-eval
-      eval(code);
-      
-      console.log = originalLog;
-      setCodeOutputs(prev => ({ ...prev, [blockId]: output || 'Done (no output)' }));
-    } catch (err) {
-      setCodeOutputs(prev => ({ ...prev, [blockId]: `Error: ${err.message}` }));
-    }
-  };
+  // Code execution is handled inside CodeNotebookBlock via sandboxed iframe
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-surface text-on-surface">Joining Live Session...</div>;
@@ -357,30 +340,11 @@ export default function LiveLessonView() {
                 }
                 if (block.type === 'CODE') {
                   return (
-                    <article key={block.id} className="bg-[#1c1f21] text-secondary-fixed rounded-xl p-8 font-mono text-sm shadow-sm overflow-hidden flex flex-col gap-4">
-                      <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-2">
-                        <div className="flex items-center gap-2 text-xs font-bold text-outline-variant tracking-widest uppercase">
-                          <span className="material-symbols-outlined text-sm">code</span> Code Snippet
-                        </div>
-                        <button 
-                          onClick={() => handleRunCode(block.id, block.content)}
-                          className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95"
-                        >
-                          <span className="material-symbols-outlined text-sm">play_arrow</span>
-                          RUN CODE
-                        </button>
-                      </div>
-                      <pre className="whitespace-pre-wrap flex-1">{block.content}</pre>
-                      
-                      {codeOutputs[block.id] && (
-                        <div className="mt-4 p-4 bg-black/40 rounded-lg border border-white/5 font-mono text-xs text-secondary-fixed-dim">
-                          <div className="flex justify-between items-center mb-2">
-                            <div className="text-[10px] font-bold text-outline-variant uppercase">Output:</div>
-                            <button onClick={() => setCodeOutputs(prev => ({ ...prev, [block.id]: null }))} className="text-[10px] uppercase text-error hover:text-error/80">Clear</button>
-                          </div>
-                          <pre className="whitespace-pre-wrap">{codeOutputs[block.id]}</pre>
-                        </div>
-                      )}
+                    <article key={block.id}>
+                      <CodeNotebookBlock
+                        code={block.content}
+                        blockId={block.id}
+                      />
                     </article>
                   );
                 }
