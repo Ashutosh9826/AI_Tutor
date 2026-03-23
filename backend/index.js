@@ -3,7 +3,7 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 const { PrismaClient } = require('@prisma/client');
-require('dotenv').config();
+require('dotenv').config({ override: true });
 const { registerRealtimeHandlers } = require('./realtime/registerRealtimeHandlers');
 
 const app = express();
