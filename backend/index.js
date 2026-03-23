@@ -4,6 +4,12 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { PrismaClient } = require('@prisma/client');
 require('dotenv').config();
+const {
+  addClassPresence,
+  removeClassPresence,
+  removeSocketPresence,
+  getOnlineStudentIdsForClass,
+} = require('./services/presenceStore');
 
 const app = express();
 const server = http.createServer(app);
@@ -31,6 +37,7 @@ const classesRoutes = require('./routes/classes');
 const assignmentsRoutes = require('./routes/assignments');
 const lessonsRoutes = require('./routes/lessons');
 const chatRoutes = require('./routes/chat');
+const attendanceRoutes = require('./routes/attendance');
 
 // Mount routers
 app.use('/api/auth', authRoutes);
@@ -38,6 +45,7 @@ app.use('/api/classes', classesRoutes);
 app.use('/api/assignments', assignmentsRoutes);
 app.use('/api/lessons', lessonsRoutes);
 app.use('/api/lesson-chat', chatRoutes);
+app.use('/api/attendance', attendanceRoutes);
 
 // Example route to get all classes
 app.get('/classes', async (req, res) => {
@@ -113,6 +121,49 @@ io.on('connection', (socket) => {
     io.to(data.lessonId).emit('show_leaderboard', data);
   });
 
+  socket.on('join_class_presence', (data) => {
+    const classId = String(data?.classId || '').trim();
+    const userId = String(data?.userId || '').trim();
+    const role = String(data?.role || '').trim().toUpperCase();
+
+    if (!classId || !userId || !role) {
+      return;
+    }
+
+    addClassPresence({
+      classId,
+      userId,
+      role,
+      socketId: socket.id,
+    });
+
+    socket.join(`class_presence:${classId}`);
+    io.to(`class_presence:${classId}`).emit('class_presence_updated', {
+      classId,
+      onlineStudentIds: getOnlineStudentIdsForClass(classId),
+    });
+  });
+
+  socket.on('leave_class_presence', (data) => {
+    const classId = String(data?.classId || '').trim();
+    const userId = String(data?.userId || '').trim();
+    if (!classId || !userId) {
+      return;
+    }
+
+    removeClassPresence({
+      classId,
+      userId,
+      socketId: socket.id,
+    });
+
+    socket.leave(`class_presence:${classId}`);
+    io.to(`class_presence:${classId}`).emit('class_presence_updated', {
+      classId,
+      onlineStudentIds: getOnlineStudentIdsForClass(classId),
+    });
+  });
+
   socket.on('disconnecting', () => {
     socket.rooms.forEach(async (room) => {
       if (room !== socket.id) {
@@ -123,6 +174,13 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    const affectedClassIds = removeSocketPresence(socket.id);
+    affectedClassIds.forEach((classId) => {
+      io.to(`class_presence:${classId}`).emit('class_presence_updated', {
+        classId,
+        onlineStudentIds: getOnlineStudentIdsForClass(classId),
+      });
+    });
     console.log('User disconnected:', socket.id);
   });
 });

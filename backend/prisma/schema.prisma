@@ -27,6 +27,8 @@ model User {
   enrollments    Enrollment[]
   submissions    Submission[]
   messages       ChatMessage[]
+  attendance_marked AttendanceRecord[] @relation("AttendanceMarkedBy")
+  attendance_records AttendanceRecord[] @relation("AttendanceStudent")
 }
 
 model Class {
@@ -43,6 +45,7 @@ model Class {
   assignments Assignment[]
   announcements Announcement[]
   lessons     Lesson[]
+  attendance_records AttendanceRecord[]
 }
 
 model Enrollment {
@@ -142,4 +145,24 @@ model ChatMessage {
 
   lesson    Lesson   @relation(fields: [lesson_id], references: [id])
   user      User     @relation(fields: [user_id], references: [id])
+}
+
+model AttendanceRecord {
+  id              String   @id @default(uuid())
+  class_id        String
+  student_id      String
+  attendance_date DateTime
+  status          String   // 'PRESENT' | 'ABSENT'
+  mode            String   // 'MANUAL' | 'AUTO'
+  marked_by       String
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  class           Class    @relation(fields: [class_id], references: [id])
+  student         User     @relation("AttendanceStudent", fields: [student_id], references: [id])
+  marker          User     @relation("AttendanceMarkedBy", fields: [marked_by], references: [id])
+
+  @@unique([class_id, student_id, attendance_date])
+  @@index([class_id, attendance_date])
+  @@index([student_id, attendance_date])
 }

@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import { assignmentService, classService, lessonService } from '../services/api';
 import useAuthStore from '../store/useAuthStore';
 import TopNavBar from '../components/TopNavBar';
 import Sidebar from '../components/Sidebar';
+
+const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
 
 export default function ClassStreamPage() {
   const location = useLocation();
@@ -43,6 +46,7 @@ export default function ClassStreamPage() {
   const [deletingLessonId, setDeletingLessonId] = useState(null);
   const [actionError, setActionError] = useState('');
   const [showClassInfo, setShowClassInfo] = useState(false);
+  const presenceSocketRef = useRef(null);
 
   useEffect(() => {
     if (!user) {
@@ -56,6 +60,38 @@ export default function ClassStreamPage() {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId, user, navigate]);
+
+  useEffect(() => {
+    if (!classId || !user?.id) return undefined;
+
+    const socket = io(SOCKET_URL);
+    presenceSocketRef.current = socket;
+
+    const joinPayload = {
+      classId,
+      userId: user.id,
+      role: user.role,
+    };
+
+    const handleConnect = () => {
+      socket.emit('join_class_presence', joinPayload);
+    };
+
+    socket.on('connect', handleConnect);
+    if (socket.connected) {
+      handleConnect();
+    }
+
+    return () => {
+      socket.off('connect', handleConnect);
+      socket.emit('leave_class_presence', {
+        classId,
+        userId: user.id,
+      });
+      socket.disconnect();
+      presenceSocketRef.current = null;
+    };
+  }, [classId, user?.id, user?.role]);
 
   const fetchData = async () => {
     try {

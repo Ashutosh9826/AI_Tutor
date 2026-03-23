@@ -210,4 +210,27 @@ export const chatService = {
   }
 };
 
+export const attendanceService = {
+  getClassDay: async (classId, date) => {
+    const response = await api.get(`/attendance/class/${classId}/day`, {
+      params: { date },
+    });
+    return response.data;
+  },
+  saveManual: async (classId, payload) => {
+    const response = await api.post(`/attendance/class/${classId}/day/manual`, payload);
+    return response.data;
+  },
+  takeAutomatic: async (classId, payload) => {
+    const response = await api.post(`/attendance/class/${classId}/day/automatic`, payload);
+    return response.data;
+  },
+  getMy: async (classId) => {
+    const response = await api.get('/attendance/my', {
+      params: { classId },
+    });
+    return response.data;
+  },
+};
+
 export default api;

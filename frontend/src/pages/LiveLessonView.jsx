@@ -236,6 +236,35 @@ export default function LiveLessonView() {
     };
   }, [lessonId, user, navigate]);
 
+  useEffect(() => {
+    const socket = socketRef.current;
+    const classId = lesson?.class_id;
+    if (!socket || !classId || !user?.id) return undefined;
+
+    const joinPayload = {
+      classId,
+      userId: user.id,
+      role: user.role,
+    };
+
+    const handleConnect = () => {
+      socket.emit('join_class_presence', joinPayload);
+    };
+
+    socket.on('connect', handleConnect);
+    if (socket.connected) {
+      handleConnect();
+    }
+
+    return () => {
+      socket.off('connect', handleConnect);
+      socket.emit('leave_class_presence', {
+        classId,
+        userId: user.id,
+      });
+    };
+  }, [lesson?.class_id, user?.id, user?.role]);
+
   // Recalculate understanding percent
   useEffect(() => {
     let totalAnswers = 0;

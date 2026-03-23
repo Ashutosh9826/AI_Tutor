@@ -29,6 +29,7 @@ Use this file as the first read for any new AI session.
 - AI prompt updated to generate notebook-ready code and stateful simulations.
 - Teachers can refine any single lesson block with AI without touching other blocks.
 - AI lesson generation now uses 3-step pipeline: Structure, Block Strategy, Full Lesson.
+- Attendance module added with manual and automatic class attendance modes.
 
 ## Next Actions
 
@@ -37,7 +38,7 @@ Use this file as the first read for any new AI session.
 - Harden sandbox policy and library allowlist decisions.
 - Add E2E smoke checks for AI-generated simulation and code blocks.
 - Add optional one-click save after per-block AI refinement.
-- Add generation diagnostics UI (optional) to preview step outputs for teachers.
+- Add attendance history exports and per-class monthly analytics.
 
 ## Decisions
 
@@ -47,6 +48,14 @@ Use this file as the first read for any new AI session.
 
 <!-- SESSION_LOG_START -->
 ## Session Log
+
+### 2026-03-23 - Attendance Feature
+- Added AttendanceRecord model, indexes, and Prisma/SQL schema updates.
+- Added teacher attendance APIs for day view, manual save, and auto-mark.
+- Added student-only API to view own attendance summary and records.
+- Added socket-based class presence tracking for online student detection.
+- Rebuilt People page into attendance dashboard for teacher/student roles.
+- Synced local SQLite with Prisma schema and regenerated Prisma client.
 
 ### 2026-03-23 - 3-Step Lesson Generation
 - Replaced single-pass generation with 3 sequential AI steps.

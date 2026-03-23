@@ -118,9 +118,34 @@ CREATE TABLE "ChatMessage" (
     CONSTRAINT "ChatMessage_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
+-- CreateTable
+CREATE TABLE "AttendanceRecord" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "class_id" TEXT NOT NULL,
+    "student_id" TEXT NOT NULL,
+    "attendance_date" DATETIME NOT NULL,
+    "status" TEXT NOT NULL,
+    "mode" TEXT NOT NULL,
+    "marked_by" TEXT NOT NULL,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "AttendanceRecord_class_id_fkey" FOREIGN KEY ("class_id") REFERENCES "Class" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "AttendanceRecord_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "AttendanceRecord_marked_by_fkey" FOREIGN KEY ("marked_by") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Class_class_code_key" ON "Class"("class_code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AttendanceRecord_class_id_student_id_attendance_date_key" ON "AttendanceRecord"("class_id", "student_id", "attendance_date");
+
+-- CreateIndex
+CREATE INDEX "AttendanceRecord_class_id_attendance_date_idx" ON "AttendanceRecord"("class_id", "attendance_date");
+
+-- CreateIndex
+CREATE INDEX "AttendanceRecord_student_id_attendance_date_idx" ON "AttendanceRecord"("student_id", "attendance_date");
 
