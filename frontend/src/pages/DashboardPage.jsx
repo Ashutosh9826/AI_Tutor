@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { classService } from '../services/api';
+import { authService, classService } from '../services/api';
 import useAuthStore from '../store/useAuthStore';
 import TopNavBar from '../components/TopNavBar';
 import Sidebar from '../components/Sidebar';
 
 export default function DashboardPage() {
   const [classes, setClasses] = useState([]);
-  const { user } = useAuthStore();
+  const { user, setUser, logout } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -55,11 +55,36 @@ export default function DashboardPage() {
     }
   };
 
+  const resolveSessionUser = async () => {
+    try {
+      const me = await authService.getMe();
+      if (!me) return null;
+
+      if (!user || user.id !== me.id || user.role !== me.role) {
+        setUser(me);
+      }
+
+      return me;
+    } catch (err) {
+      console.error('Failed to refresh current session user', err);
+      logout();
+      navigate('/login');
+      return null;
+    }
+  };
+
   const handleCreateClass = async (e) => {
     e.preventDefault();
     setModalError('');
     setModalLoading(true);
     try {
+      const me = await resolveSessionUser();
+      if (!me) return;
+      if (me.role !== 'TEACHER') {
+        setModalError('Only teacher accounts can create classes. Please log in with a teacher account.');
+        return;
+      }
+
       await classService.createClass({ name: className, section: classSection });
       setShowCreateModal(false);
       setClassName('');
@@ -77,6 +102,13 @@ export default function DashboardPage() {
     setModalError('');
     setModalLoading(true);
     try {
+      const me = await resolveSessionUser();
+      if (!me) return;
+      if (me.role === 'TEACHER') {
+        setModalError('This account is a Teacher account. Use "Create Class" or log in with a student account to join classes.');
+        return;
+      }
+
       await classService.joinClass(joinCode);
       setShowJoinModal(false);
       setJoinCode('');
@@ -88,9 +120,12 @@ export default function DashboardPage() {
     }
   };
 
-  const openActionModal = () => {
+  const openActionModal = async () => {
     setModalError('');
-    if (user?.role === 'TEACHER') {
+    const me = await resolveSessionUser();
+    if (!me) return;
+
+    if (me.role === 'TEACHER') {
       setShowCreateModal(true);
     } else {
       setShowJoinModal(true);

@@ -84,6 +84,11 @@ export default function LoginPage() {
               Teacher
             </button>
           </div>
+          {!isRegistering && (
+            <p className="text-[11px] text-on-surface-variant -mt-6 mb-6 text-center">
+              Role selection affects registration and first-time Google sign-in. Email login uses your existing account role.
+            </p>
+          )}
           
           <form className="space-y-6" onSubmit={handleSubmit}>
             {/* Google Sign In (Real OAuth) */}
