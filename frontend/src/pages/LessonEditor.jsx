@@ -21,50 +21,183 @@ const SIMULATION_TYPES = [
   'SYSTEM_ARCHITECTURE',
 ];
 
+const DEFAULT_SIMULATION_SANDBOX_CODE = `const { input, helpers } = context;
+
+const nodes = Array.isArray(input.nodes) && input.nodes.length > 0
+  ? input.nodes
+  : ['A', 'B', 'C', 'D', 'E'];
+
+const edges = Array.isArray(input.edges) && input.edges.length > 0
+  ? input.edges
+  : [
+      { from: 'A', to: 'B', weight: 4 },
+      { from: 'A', to: 'C', weight: 2 },
+      { from: 'C', to: 'B', weight: 1 },
+      { from: 'B', to: 'D', weight: 5 },
+      { from: 'D', to: 'E', weight: 2 },
+    ];
+
+const start = input.start || nodes[0];
+const target = input.target || nodes[nodes.length - 1];
+
+const adjacency = new Map();
+nodes.forEach((node) => adjacency.set(node, []));
+edges.forEach((edge) => {
+  if (!adjacency.has(edge.from)) adjacency.set(edge.from, []);
+  adjacency.get(edge.from).push(edge);
+});
+
+const distances = {};
+const previous = {};
+const visited = new Set();
+nodes.forEach((node) => {
+  distances[node] = Infinity;
+  previous[node] = null;
+});
+distances[start] = 0;
+
+const steps = [];
+steps.push({
+  title: 'Initialize',
+  explanation: 'Set all distances to Infinity except the source.',
+  activeNodes: [start],
+  stateValues: { distances: { ...distances }, visited: [] },
+});
+
+while (visited.size < nodes.length) {
+  let current = null;
+  let bestDistance = Infinity;
+
+  nodes.forEach((node) => {
+    if (!visited.has(node) && distances[node] < bestDistance) {
+      bestDistance = distances[node];
+      current = node;
+    }
+  });
+
+  if (!current || bestDistance === Infinity) break;
+  visited.add(current);
+
+  steps.push({
+    title: 'Visit ' + current,
+    explanation: 'Pick the unvisited node with smallest tentative distance.',
+    activeNodes: [current],
+    stateValues: {
+      current,
+      visited: [...visited],
+      distances: { ...distances },
+    },
+  });
+
+  (adjacency.get(current) || []).forEach((edge) => {
+    const nextDistance = distances[current] + (edge.weight || 0);
+    if (nextDistance < (distances[edge.to] ?? Infinity)) {
+      distances[edge.to] = nextDistance;
+      previous[edge.to] = current;
+      steps.push({
+        title: 'Relax ' + edge.from + ' -> ' + edge.to,
+        explanation: 'Found a shorter route to ' + edge.to + '.',
+        activeNodes: [edge.from, edge.to],
+        activeEdges: [helpers.edgeId(edge.from, edge.to)],
+        stateValues: {
+          updatedNode: edge.to,
+          newDistance: nextDistance,
+          previous: current,
+          distances: { ...distances },
+        },
+      });
+    }
+  });
+
+  if (current === target) break;
+}
+
+const path = [];
+let pointer = target;
+while (pointer) {
+  path.unshift(pointer);
+  pointer = previous[pointer];
+}
+
+const pathEdges = [];
+for (let i = 0; i < path.length - 1; i += 1) {
+  pathEdges.push(helpers.edgeId(path[i], path[i + 1]));
+}
+
+if (path.length > 0 && path[0] === start) {
+  steps.push({
+    title: 'Shortest Path',
+    explanation: 'Backtrack predecessors to reconstruct the optimal path.',
+    activeNodes: path,
+    activeEdges: pathEdges,
+    stateValues: { path, totalCost: distances[target] },
+  });
+}
+
+return {
+  title: 'Programmable Dijkstra Simulation',
+  diagramType: 'GRAPH',
+  description: 'Generated from sandbox code. Replace this with any process simulation.',
+  hint: 'Return a simulation object with nodes, edges, and steps.',
+  solutionText:
+    path.length > 0 && path[0] === start
+      ? 'Shortest path: ' + path.join(' -> ') + ' with cost ' + distances[target]
+      : 'No path from ' + start + ' to ' + target + '.',
+  nodes: nodes.map((id) => ({ id, label: id })),
+  edges: edges.map((edge) => ({
+    id: helpers.edgeId(edge.from, edge.to),
+    from: edge.from,
+    to: edge.to,
+    label: typeof edge.weight === 'number' ? String(edge.weight) : '',
+  })),
+  steps,
+};`;
+
 const defaultSimulationContent = () => ({
-  title: 'Binary Search Simulation',
-  diagramType: 'ALGORITHM',
-  description: 'Trace each iteration of binary search and observe how low/high/mid change.',
-  hint: 'Compare target with middle value, then discard one half.',
+  title: 'Interactive Simulation Sandbox',
+  diagramType: 'GRAPH',
+  description: 'Programmable simulation environment. AI can generate code to create dynamic steps and visuals.',
+  hint: 'Use Step controls to inspect each transition.',
+  sandbox: {
+    enabled: true,
+    inputJson: JSON.stringify(
+      {
+        start: 'A',
+        target: 'E',
+        nodes: ['A', 'B', 'C', 'D', 'E'],
+        edges: [
+          { from: 'A', to: 'B', weight: 4 },
+          { from: 'A', to: 'C', weight: 2 },
+          { from: 'C', to: 'B', weight: 1 },
+          { from: 'B', to: 'D', weight: 5 },
+          { from: 'D', to: 'E', weight: 2 },
+        ],
+      },
+      null,
+      2
+    ),
+    code: DEFAULT_SIMULATION_SANDBOX_CODE,
+  },
   nodes: [
-    { id: 'low', label: 'Low Pointer' },
-    { id: 'mid', label: 'Mid Pointer' },
-    { id: 'high', label: 'High Pointer' },
-    { id: 'target', label: 'Target' },
+    { id: 'start', label: 'Start' },
+    { id: 'process', label: 'Process' },
+    { id: 'finish', label: 'Finish' },
   ],
   edges: [
-    { from: 'low', to: 'mid', label: 'range start' },
-    { from: 'mid', to: 'high', label: 'range end' },
+    { from: 'start', to: 'process', label: 'next' },
+    { from: 'process', to: 'finish', label: 'done' },
   ],
-  table: [[1, 3, 4, 8, 12, 15, 19]],
+  table: [],
   steps: [
     {
-      title: 'Initialize',
-      explanation: 'Set low=0, high=n-1, and compute middle index.',
-      activeNodes: ['low', 'mid', 'high'],
-      activeEdges: ['low->mid', 'mid->high'],
-      stateValues: { low: 0, high: 6, mid: 3, midValue: 8 },
-      highlightCells: [{ row: 0, col: 3 }],
-    },
-    {
-      title: 'Move Right',
-      explanation: 'Target is larger than mid value, move low to mid + 1.',
-      activeNodes: ['low', 'mid', 'high', 'target'],
-      activeEdges: ['low->mid', 'mid->high'],
-      stateValues: { low: 4, high: 6, mid: 5, midValue: 15, target: 15 },
-      highlightCells: [{ row: 0, col: 5 }],
-    },
-    {
-      title: 'Found Target',
-      explanation: 'Middle value equals target. Search completes.',
-      activeNodes: ['mid', 'target'],
+      title: 'Sandbox Ready',
+      explanation: 'Run the script to generate dynamic simulation steps.',
+      activeNodes: ['start'],
       activeEdges: [],
-      stateValues: { answerIndex: 5, value: 15 },
-      highlightCells: [{ row: 0, col: 5 }],
-      timelineIndex: 2,
+      stateValues: { status: 'ready' },
     },
   ],
-  solutionText: 'Binary search finishes in O(log n) by halving the search interval each step.',
+  solutionText: 'Use sandbox code to compute and explain the final state.',
 });
 
 const nodesToText = (nodes = []) =>
@@ -484,6 +617,33 @@ export default function LessonEditor() {
         nextSteps[stepIndex] = { ...nextSteps[stepIndex], ...changes };
         updateSimulation({ steps: nextSteps });
       };
+      const sandbox = simData.sandbox && typeof simData.sandbox === 'object' ? simData.sandbox : {};
+      const sandboxEnabled = Boolean(sandbox.enabled);
+      const updateSandbox = (changes) =>
+        updateSimulation({
+          sandbox: { ...sandbox, ...changes },
+        });
+      const loadDefaultSandboxTemplate = () =>
+        updateSandbox({
+          enabled: true,
+          code: DEFAULT_SIMULATION_SANDBOX_CODE,
+          inputJson: JSON.stringify(
+            {
+              start: 'A',
+              target: 'E',
+              nodes: ['A', 'B', 'C', 'D', 'E'],
+              edges: [
+                { from: 'A', to: 'B', weight: 4 },
+                { from: 'A', to: 'C', weight: 2 },
+                { from: 'C', to: 'B', weight: 1 },
+                { from: 'B', to: 'D', weight: 5 },
+                { from: 'D', to: 'E', weight: 2 },
+              ],
+            },
+            null,
+            2
+          ),
+        });
 
       return (
         <section key={block.localId} className="group relative bg-surface-container-lowest rounded-xl p-8 transition-all hover:shadow-lg notebook-line border-l-2 border-transparent hover:border-l-primary mb-8">
@@ -548,26 +708,105 @@ export default function LessonEditor() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Nodes (id|label per line)</label>
-              <textarea
-                rows={5}
-                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
-                value={nodesToText(simData.nodes)}
-                onChange={(e) => updateSimulation({ nodes: parseNodesText(e.target.value) })}
-              />
+          <div className="mb-6 rounded-xl border border-outline-variant/25 bg-surface-container-low p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-outline">Programmable Sandbox</p>
+                <p className="text-xs text-outline mt-1">
+                  Let AI or teachers write JavaScript that returns the full simulation object.
+                </p>
+              </div>
+              <label className="inline-flex items-center gap-2 text-xs font-semibold text-on-surface">
+                <input
+                  type="checkbox"
+                  checked={sandboxEnabled}
+                  onChange={(e) => updateSandbox({ enabled: e.target.checked })}
+                  className="accent-primary"
+                />
+                Enable runtime
+              </label>
             </div>
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Edges (from-&gt;to|label per line)</label>
-              <textarea
-                rows={5}
-                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
-                value={edgesToText(simData.edges)}
-                onChange={(e) => updateSimulation({ edges: parseEdgesText(e.target.value) })}
-              />
-            </div>
+
+            {sandboxEnabled && (
+              <>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">
+                    Input JSON
+                  </label>
+                  <textarea
+                    rows={6}
+                    className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
+                    placeholder='{"start":"A","target":"E","nodes":[],"edges":[]}'
+                    value={typeof sandbox.inputJson === 'string' ? sandbox.inputJson : '{}'}
+                    onChange={(e) => updateSandbox({ inputJson: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">
+                    Sandbox Script (must return a simulation object)
+                  </label>
+                  <textarea
+                    rows={14}
+                    className="w-full bg-[#1c1f21] text-slate-100 border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
+                    value={typeof sandbox.code === 'string' ? sandbox.code : ''}
+                    onChange={(e) => updateSandbox({ code: e.target.value })}
+                    spellCheck={false}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={loadDefaultSandboxTemplate}
+                    className="text-xs font-semibold text-primary border border-primary/30 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 rounded-lg"
+                  >
+                    Load Dijkstra template
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateSandbox({ code: '' })}
+                    className="text-xs font-semibold text-error border border-error/30 bg-error/5 hover:bg-error/10 px-3 py-1.5 rounded-lg"
+                  >
+                    Clear script
+                  </button>
+                </div>
+                <p className="text-[11px] text-outline">
+                  Script entrypoint: use <code>context.input</code> and <code>context.helpers</code>, then{' '}
+                  <code>return {'{ ... }'}</code> with fields like <code>nodes</code>, <code>edges</code>,{' '}
+                  <code>steps</code>, <code>table</code>, <code>timeline</code>, <code>description</code>, and{' '}
+                  <code>solutionText</code>.
+                </p>
+              </>
+            )}
           </div>
+
+          <details className="mb-6 rounded-xl border border-outline-variant/20 bg-surface-container-low p-4" open={!sandboxEnabled}>
+            <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-widest text-outline">
+              Manual Step Authoring (Optional Fallback)
+            </summary>
+            <p className="text-xs text-outline mt-2 mb-4">
+              Use this when you want static steps. If sandbox runtime is enabled, these fields act as a fallback.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Nodes (id|label per line)</label>
+                <textarea
+                  rows={5}
+                  className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
+                  value={nodesToText(simData.nodes)}
+                  onChange={(e) => updateSimulation({ nodes: parseNodesText(e.target.value) })}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Edges (from-&gt;to|label per line)</label>
+                <textarea
+                  rows={5}
+                  className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
+                  value={edgesToText(simData.edges)}
+                  onChange={(e) => updateSimulation({ edges: parseEdgesText(e.target.value) })}
+                />
+              </div>
+            </div>
 
           <div className="mb-6 space-y-3">
             <div className="flex items-center justify-between">
@@ -658,6 +897,7 @@ export default function LessonEditor() {
               </div>
             ))}
           </div>
+          </details>
 
           <div className="rounded-xl border border-outline-variant/20 p-4 bg-surface-container-low">
             <p className="text-[10px] font-bold uppercase tracking-widest text-outline mb-3">Preview</p>
