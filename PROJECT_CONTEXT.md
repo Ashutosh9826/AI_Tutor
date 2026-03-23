@@ -22,17 +22,18 @@ Use this file as the first read for any new AI session.
 
 ## Current Snapshot
 
-- Status: foundation cleanup complete; runtime clutter removed.
-- Repo structure: backend/frontend runtime folders + docs archive + context compactor.
-- Env tracking: `.env` removed from VCS; `.env.example` files added.
-- Legacy data stance: local DB/log artifacts intentionally removed.
+- Status: core classroom flows stabilized after multiple bug fixes.
+- CODE blocks now run in-browser notebook mode with multi-cell execution.
+- Live lessons allow students to edit and run code instantly.
+- INTERACTIVE_SIMULATION blocks include built-in state visualization panels.
+- AI prompt updated to generate notebook-ready code and stateful simulations.
 
 ## Next Actions
 
-- Reinstall dependencies when needed: `npm run setup`.
-- Recreate local env files from examples.
-- Resume product development from feature priorities, not legacy artifacts.
-- Add tests and CI once feature surface is stabilized.
+- Add backend/frontend tests for notebook cell serialization and simulation state events.
+- Verify multi-user live lesson behavior for per-student local code edits.
+- Harden sandbox policy and library allowlist decisions.
+- Add E2E smoke checks for AI-generated simulation and code blocks.
 
 ## Decisions
 
@@ -42,6 +43,14 @@ Use this file as the first read for any new AI session.
 
 <!-- SESSION_LOG_START -->
 ## Session Log
+
+### 2026-03-23 - Notebook and Simulation Upgrade
+- Rebuilt CODE block into sandboxed multi-cell browser notebook runtime.
+- Added direct library imports via auto-resolved ESM package specifiers.
+- Enabled live lesson code editing for students with local state.
+- Added simulation state snapshot, timeline, and runtime notes panels.
+- Added simulation `Input JSON` editor in lesson authoring UI.
+- Updated AI generation prompt for stateful simulations and notebook code sections.
 
 ### 2026-03-23 - Foundation Reset
 - Removed tracked runtime clutter: logs, lint dumps, local DB files, ad-hoc scripts.

@@ -63,7 +63,7 @@ router.post('/generate', authenticateToken, requireTeacher, async (req, res) => 
 
     Use only these block types:
     1. "TEXT": Thorough explanations with clear headings.
-    2. "CODE": Working JavaScript examples as a plain string (no markdown fences).
+    2. "CODE": Notebook-ready JavaScript. Use plain text code (no markdown fences). For multiple runnable sections, separate cells with lines that start with "// %%".
     3. "EXERCISE": Mid-lesson MCQ checks. Each option must include "feedback".
     4. "QUIZ": End-of-lesson competitive MCQ questions.
     5. "DISCUSSION": Thought-provoking prompts.
@@ -87,7 +87,19 @@ router.post('/generate', authenticateToken, requireTeacher, async (req, res) => 
     - Keep code deterministic, safe, and classroom appropriate.
     - Use browser JavaScript only.
     - The runtime provides context.app, context.input, and context.helpers.
+    - Use built-in helpers for clear state visualization:
+      - context.helpers.setState({ ... }, "label")
+      - context.helpers.replaceState({ ... }, "label")
+      - context.helpers.emitStep("label", { ... })
+      - context.helpers.log("message")
+    - Include obvious controls in the simulation UI (buttons/sliders/inputs) and visually reflect changing state.
+    - Keep simulation configuration minimal and easy to read.
     - Do NOT use deprecated fields: canvasSandbox, sandbox, diagramType, nodes, edges, or steps.
+
+    CODE block constraints:
+    - Must run directly in a browser JavaScript runtime.
+    - May use direct ESM imports from URLs or package names (for example: import * as d3 from "d3";).
+    - Keep setup minimal so students can run and modify instantly.
 
     Content quality constraints:
     - Include a balanced sequence of explanation, practice, and assessment.

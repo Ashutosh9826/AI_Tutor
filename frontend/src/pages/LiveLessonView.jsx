@@ -52,6 +52,30 @@ const normalizeSimulationContent = (raw) => {
   };
 };
 
+const normalizeCodeContent = (raw) => {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw;
+  }
+
+  if (typeof raw !== 'string') {
+    return '';
+  }
+
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray(parsed.cells)) {
+        return parsed;
+      }
+    } catch {
+      // Keep legacy string code blocks as-is.
+    }
+  }
+
+  return raw;
+};
+
 const normalizeLessonBlock = (block) => {
   if (block.type === 'INTERACTIVE_SIMULATION') {
     return { ...block, content: normalizeSimulationContent(block.content) };
@@ -67,7 +91,7 @@ const normalizeLessonBlock = (block) => {
   if (block.type === 'CODE') {
     return {
       ...block,
-      content: typeof block.content === 'string' ? block.content : '',
+      content: normalizeCodeContent(block.content),
     };
   }
 
@@ -299,6 +323,19 @@ export default function LiveLessonView() {
     });
   };
 
+  const handleLiveCodeChange = (blockId, nextContent) => {
+    setLesson((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        blocks: (prev.blocks || []).map((block) =>
+          block.id === blockId ? { ...block, content: nextContent } : block
+        ),
+      };
+    });
+  };
+
   // Code execution is handled inside CodeNotebookBlock via sandboxed iframe
 
   if (loading) {
@@ -389,8 +426,9 @@ export default function LiveLessonView() {
                   return (
                     <article key={block.id}>
                       <CodeNotebookBlock
-                        code={block.content}
-                        editable={false}
+                        content={block.content}
+                        onChange={(next) => handleLiveCodeChange(block.id, next)}
+                        editable
                         blockId={block.id}
                       />
                     </article>

@@ -159,7 +159,12 @@ export default function LessonEditor() {
                 parsedContent = parsed || getDefaultContentForType(b.type);
               }
             } else if (b.type === 'CODE') {
-              parsedContent = typeof b.content === 'string' ? b.content : '';
+              const parsedCode = parseJsonObject(b.content);
+              if (parsedCode && Array.isArray(parsedCode.cells)) {
+                parsedContent = parsedCode;
+              } else {
+                parsedContent = typeof b.content === 'string' ? b.content : '';
+              }
             }
 
             return { ...b, localId: b.id, content: parsedContent };
@@ -257,7 +262,7 @@ export default function LessonEditor() {
         <section key={block.localId} className="group relative mb-8">
           <BlockControls index={index} localId={block.localId} dark />
           <CodeNotebookBlock
-            code={block.content}
+            content={block.content}
             onChange={(v) => updateBlock(block.localId, v)}
             editable
             blockId={block.localId}
@@ -474,6 +479,16 @@ export default function LessonEditor() {
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">External Libraries (one URL per line)</label>
               <textarea rows={2} className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y" placeholder="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js" value={libsToText(simData.libs)} onChange={(e) => updateSimulation({ libs: parseLibsText(e.target.value) })} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Input JSON</label>
+              <textarea
+                rows={3}
+                className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
+                placeholder='{"value":10,"speed":2}'
+                value={typeof simData.inputJson === 'string' ? simData.inputJson : JSON.stringify(simData.inputJson ?? {}, null, 2)}
+                onChange={(e) => updateSimulation({ inputJson: e.target.value })}
+              />
             </div>
             <p className="text-[11px] text-outline">
               Use <code>context.app</code>, <code>context.input</code>, and <code>context.helpers</code> in your JavaScript.
