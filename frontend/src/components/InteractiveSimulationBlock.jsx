@@ -28,45 +28,83 @@ const DIAGRAM_LABELS = {
 
 const DEFAULT_SANDBOX_CODE = `const { input, helpers } = context;
 
-const nodes = Array.isArray(input.nodes) && input.nodes.length > 0
+const rawNodes = Array.isArray(input.nodes) && input.nodes.length > 0
   ? input.nodes
-  : ['A', 'B', 'C', 'D', 'E'];
+  : [
+      { id: '1', label: '1', caption: 'a', role: 'source', x: 0.12, y: 0.78 },
+      { id: '2', label: '2', x: 0.42, y: 0.82 },
+      { id: '3', label: '3', x: 0.40, y: 0.50 },
+      { id: '4', label: '4', x: 0.88, y: 0.48 },
+      { id: '5', label: '5', caption: 'b', x: 0.55, y: 0.16 },
+      { id: '6', label: '6', x: 0.17, y: 0.24 },
+    ];
+
+const nodes = rawNodes.map((node, index) => {
+  if (typeof node === 'string' || typeof node === 'number') {
+    const id = String(node);
+    return {
+      id,
+      label: id,
+      caption: '',
+      x: 0.12 + (index % 3) * 0.35,
+      y: 0.2 + Math.floor(index / 3) * 0.3,
+    };
+  }
+  const id = String(node.id ?? node.label ?? index + 1);
+  return {
+    id,
+    label: String(node.label ?? id),
+    caption: String(node.caption ?? ''),
+    role: String(node.role ?? ''),
+    x: typeof node.x === 'number' ? node.x : 0.5,
+    y: typeof node.y === 'number' ? node.y : 0.5,
+  };
+});
 
 const edgeList = Array.isArray(input.edges) && input.edges.length > 0
   ? input.edges
   : [
-      { from: 'A', to: 'B', weight: 4 },
-      { from: 'A', to: 'C', weight: 2 },
-      { from: 'C', to: 'B', weight: 1 },
-      { from: 'B', to: 'D', weight: 5 },
-      { from: 'C', to: 'D', weight: 8 },
-      { from: 'C', to: 'E', weight: 10 },
-      { from: 'D', to: 'E', weight: 2 },
+      { from: '1', to: '2', weight: 7 },
+      { from: '1', to: '3', weight: 9 },
+      { from: '1', to: '6', weight: 14 },
+      { from: '2', to: '3', weight: 10 },
+      { from: '2', to: '4', weight: 15 },
+      { from: '3', to: '4', weight: 11 },
+      { from: '3', to: '6', weight: 2 },
+      { from: '4', to: '5', weight: 6 },
+      { from: '5', to: '6', weight: 9 },
     ];
 
-const start = input.start || nodes[0];
-const target = input.target || nodes[nodes.length - 1];
+const start = String(input.start || nodes[0].id);
+const target = String(input.target || nodes[nodes.length - 1].id);
 
 const adjacency = new Map();
-nodes.forEach((node) => adjacency.set(node, []));
+nodes.forEach((node) => adjacency.set(node.id, []));
 edgeList.forEach((edge) => {
-  if (!adjacency.has(edge.from)) adjacency.set(edge.from, []);
-  adjacency.get(edge.from).push(edge);
+  const from = String(edge.from);
+  const to = String(edge.to);
+  const weight = Number(edge.weight ?? 0);
+  if (!adjacency.has(from)) adjacency.set(from, []);
+  if (!adjacency.has(to)) adjacency.set(to, []);
+  adjacency.get(from).push({ from, to, weight });
+  if (edge.bidirectional !== false) {
+    adjacency.get(to).push({ from: to, to: from, weight });
+  }
 });
 
 const dist = {};
 const prev = {};
 const visited = new Set();
 nodes.forEach((node) => {
-  dist[node] = Infinity;
-  prev[node] = null;
+  dist[node.id] = Infinity;
+  prev[node.id] = null;
 });
 dist[start] = 0;
 
 const steps = [];
 steps.push({
   title: 'Initialize Distances',
-  explanation: 'Set all distances to Infinity except the start node.',
+  explanation: 'Set all node distances to Infinity except the source node.',
   activeNodes: [start],
   activeEdges: [],
   stateValues: {
@@ -82,9 +120,9 @@ while (visited.size < nodes.length) {
   let bestDistance = Infinity;
 
   nodes.forEach((node) => {
-    if (!visited.has(node) && dist[node] < bestDistance) {
-      bestDistance = dist[node];
-      current = node;
+    if (!visited.has(node.id) && dist[node.id] < bestDistance) {
+      bestDistance = dist[node.id];
+      current = node.id;
     }
   });
 
@@ -98,76 +136,79 @@ while (visited.size < nodes.length) {
     activeEdges: [],
     stateValues: {
       current,
-      distance: dist[current],
-      visited: [...visited],
       distances: { ...dist },
+      visited: [...visited],
     },
   });
 
   const neighbors = adjacency.get(current) || [];
   neighbors.forEach((edge) => {
-    const nextDistance = dist[current] + (edge.weight || 0);
+    const nextDistance = dist[current] + edge.weight;
     if (nextDistance < (dist[edge.to] ?? Infinity)) {
       dist[edge.to] = nextDistance;
       prev[edge.to] = current;
+
       steps.push({
         title: 'Relax ' + edge.from + ' -> ' + edge.to,
-        explanation: 'Found a shorter path to ' + edge.to + '.',
-        activeNodes: [current, edge.to],
+        explanation: 'Update shortest-known distance to node ' + edge.to + '.',
+        activeNodes: [edge.from, edge.to],
         activeEdges: [helpers.edgeId(edge.from, edge.to)],
         stateValues: {
+          current,
           updatedNode: edge.to,
-          newDistance: nextDistance,
-          predecessor: current,
           distances: { ...dist },
+          visited: [...visited],
         },
       });
     }
   });
-
-  if (current === target) break;
 }
 
 const path = [];
-let pointer = target;
-while (pointer) {
-  path.unshift(pointer);
-  pointer = prev[pointer];
+let cursor = target;
+while (cursor) {
+  path.unshift(cursor);
+  cursor = prev[cursor];
 }
 
-const pathEdgeIds = [];
+const pathEdges = [];
 for (let i = 0; i < path.length - 1; i += 1) {
-  pathEdgeIds.push(helpers.edgeId(path[i], path[i + 1]));
+  pathEdges.push(helpers.edgeId(path[i], path[i + 1]));
 }
 
-if (path.length > 0 && path[0] === start) {
+if (path.length > 1 && path[0] === start) {
   steps.push({
-    title: 'Reconstruct Path',
-    explanation: 'Backtrack predecessors to build the shortest path.',
+    title: 'Shortest Path Found',
+    explanation: 'Backtrack predecessor links to show the final shortest route.',
     activeNodes: path,
-    activeEdges: pathEdgeIds,
+    activeEdges: pathEdges,
+    annotation: "That's all!",
     stateValues: {
       path,
       totalCost: dist[target],
+      visited: [...visited],
+      distances: { ...dist },
+      message: "That's all!",
     },
   });
 }
 
 return {
-  title: 'Programmable Dijkstra Sandbox',
+  title: 'Dijkstra Interactive Animation',
   diagramType: 'GRAPH',
-  description: 'Generated by sandbox code. Edit input or script to simulate other processes.',
-  hint: 'You can return any simulation object shape from this script.',
+  description: 'Video-style shortest-path visualization with distance labels and Out states.',
+  hint: 'Red nodes are finalized (Out). Blue values show current best distances.',
   solutionText:
-    path.length > 0 && path[0] === start
-      ? 'Shortest path: ' + path.join(' -> ') + ' (cost ' + dist[target] + ')'
+    path.length > 1 && path[0] === start
+      ? 'Shortest path to ' + target + ': ' + path.join(' -> ') + ' (cost ' + dist[target] + ')'
       : 'No path found from ' + start + ' to ' + target + '.',
-  nodes: nodes.map((id) => ({ id, label: id })),
+  canvas: { width: 560, height: 400, nodeRadius: 18, padding: 28 },
+  nodes,
   edges: edgeList.map((edge) => ({
-    id: helpers.edgeId(edge.from, edge.to),
-    from: edge.from,
-    to: edge.to,
-    label: typeof edge.weight === 'number' ? String(edge.weight) : '',
+    id: helpers.edgeId(String(edge.from), String(edge.to)),
+    from: String(edge.from),
+    to: String(edge.to),
+    label: String(edge.weight ?? ''),
   })),
   steps,
 };`;
@@ -194,17 +235,26 @@ const fallbackSimulation = {
     code: DEFAULT_SANDBOX_CODE,
     inputJson: JSON.stringify(
       {
-        start: 'A',
-        target: 'E',
-        nodes: ['A', 'B', 'C', 'D', 'E'],
+        start: '1',
+        target: '5',
+        nodes: [
+          { id: '1', label: '1', caption: 'a', role: 'source', x: 0.12, y: 0.78 },
+          { id: '2', label: '2', x: 0.42, y: 0.82 },
+          { id: '3', label: '3', x: 0.40, y: 0.50 },
+          { id: '4', label: '4', x: 0.88, y: 0.48 },
+          { id: '5', label: '5', caption: 'b', x: 0.55, y: 0.16 },
+          { id: '6', label: '6', x: 0.17, y: 0.24 },
+        ],
         edges: [
-          { from: 'A', to: 'B', weight: 4 },
-          { from: 'A', to: 'C', weight: 2 },
-          { from: 'C', to: 'B', weight: 1 },
-          { from: 'B', to: 'D', weight: 5 },
-          { from: 'C', to: 'D', weight: 8 },
-          { from: 'C', to: 'E', weight: 10 },
-          { from: 'D', to: 'E', weight: 2 },
+          { from: '1', to: '2', weight: 7 },
+          { from: '1', to: '3', weight: 9 },
+          { from: '1', to: '6', weight: 14 },
+          { from: '2', to: '3', weight: 10 },
+          { from: '2', to: '4', weight: 15 },
+          { from: '3', to: '4', weight: 11 },
+          { from: '3', to: '6', weight: 2 },
+          { from: '4', to: '5', weight: 6 },
+          { from: '5', to: '6', weight: 9 },
         ],
       },
       null,
@@ -409,7 +459,7 @@ const executeSandboxProgram = (simulation, runKey) => {
   }
 };
 
-function GraphCanvas({ simulation, activeStep, compact }) {
+function GraphListCanvas({ simulation, activeStep, compact }) {
   const nodes = asArray(simulation.nodes);
   const edges = asArray(simulation.edges);
 
@@ -469,6 +519,224 @@ function GraphCanvas({ simulation, activeStep, compact }) {
       )}
     </div>
   );
+}
+
+function GraphSvgCanvas({ simulation, activeStep }) {
+  const nodes = asArray(simulation.nodes);
+  const edges = asArray(simulation.edges);
+  const canvas = isPlainObject(simulation.canvas) ? simulation.canvas : {};
+
+  const width = Number(canvas.width) > 0 ? Number(canvas.width) : 560;
+  const height = Number(canvas.height) > 0 ? Number(canvas.height) : 400;
+  const padding = Number(canvas.padding) > 0 ? Number(canvas.padding) : 34;
+  const nodeRadius = Number(canvas.nodeRadius) > 0 ? Number(canvas.nodeRadius) : 18;
+
+  const activeNodeIds = new Set(asArray(activeStep?.activeNodes).map(String));
+  const activeEdgeIds = new Set(asArray(activeStep?.activeEdges).map(String));
+
+  const visitedFromState = asArray(activeStep?.stateValues?.visited).map(String);
+  const outFromState = asArray(activeStep?.stateValues?.out).map(String);
+  const visitedSet = new Set([...visitedFromState, ...outFromState]);
+
+  const distances = isPlainObject(activeStep?.stateValues?.distances)
+    ? activeStep.stateValues.distances
+    : {};
+
+  const nodeStyles = isPlainObject(activeStep?.nodeStyles) ? activeStep.nodeStyles : {};
+  const edgeStyles = isPlainObject(activeStep?.edgeStyles) ? activeStep.edgeStyles : {};
+
+  const toPixel = (value, axisSize) => {
+    if (typeof value !== 'number') return null;
+    if (value >= 0 && value <= 1) {
+      return padding + value * (axisSize - padding * 2);
+    }
+    return value;
+  };
+
+  const points = new Map();
+  nodes.forEach((node) => {
+    const x = toPixel(node.x, width);
+    const y = toPixel(node.y, height);
+    if (typeof x === 'number' && typeof y === 'number') {
+      points.set(String(node.id), { x, y, node });
+    }
+  });
+
+  const toDisplayDistance = (value) => {
+    if (value === undefined || value === null) return '';
+    if (value === Infinity || value === 'Infinity') return '∞';
+    return String(value);
+  };
+
+  return (
+    <div className="rounded-xl bg-black p-3 sm:p-4 overflow-x-auto border border-white/10">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full h-auto bg-white rounded-lg shadow-inner"
+        role="img"
+        aria-label="Interactive graph simulation"
+      >
+        <rect x="0" y="0" width={width} height={height} fill="#ffffff" />
+
+        {edges.map((edge) => {
+          const from = points.get(String(edge.from));
+          const to = points.get(String(edge.to));
+          if (!from || !to) return null;
+
+          const currentEdgeId = edgeId(edge);
+          const reverseEdgeId = `${edge.to}->${edge.from}`;
+          const isActive = activeEdgeIds.has(currentEdgeId) || activeEdgeIds.has(reverseEdgeId);
+
+          const override = isPlainObject(edgeStyles[currentEdgeId])
+            ? edgeStyles[currentEdgeId]
+            : isPlainObject(edgeStyles[reverseEdgeId])
+              ? edgeStyles[reverseEdgeId]
+              : {};
+
+          const stroke = override.color || (isActive ? '#2e7d32' : '#1f2937');
+          const strokeWidth = Number(override.width) > 0 ? Number(override.width) : isActive ? 2.5 : 1.5;
+          const opacity = override.opacity ?? (isActive ? 1 : 0.85);
+          const isDashed = Boolean(override.dashed);
+
+          const midX = (from.x + to.x) / 2 + (Number(edge.labelOffsetX) || 0);
+          const midY = (from.y + to.y) / 2 + (Number(edge.labelOffsetY) || -8);
+
+          return (
+            <g key={currentEdgeId} className="transition-all duration-300">
+              <line
+                x1={from.x}
+                y1={from.y}
+                x2={to.x}
+                y2={to.y}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeDasharray={isDashed ? '5 4' : undefined}
+                opacity={opacity}
+              />
+              {edge.label ? (
+                <text x={midX} y={midY} fontSize="16" fill="#111827" textAnchor="middle" fontWeight="500">
+                  {edge.label}
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
+
+        {nodes.map((node) => {
+          const point = points.get(String(node.id));
+          if (!point) return null;
+
+          const customStyle = isPlainObject(nodeStyles[String(node.id)]) ? nodeStyles[String(node.id)] : {};
+          const isVisited = visitedSet.has(String(node.id));
+          const isActive = activeNodeIds.has(String(node.id));
+
+          let fill = customStyle.fill || node.fill || '#ffffff';
+          let stroke = customStyle.stroke || node.stroke || '#1f2937';
+          let textColor = customStyle.textColor || node.textColor || '#111827';
+
+          if (!customStyle.fill && node.role === 'source') {
+            fill = '#d6d3ff';
+          }
+          if (isVisited || isActive) {
+            fill = customStyle.fill || '#ef2626';
+            stroke = customStyle.stroke || '#1f2937';
+            textColor = customStyle.textColor || '#ffffff';
+          }
+
+          const distanceValue =
+            distances[node.id] ??
+            distances[node.label] ??
+            distances[String(node.id)] ??
+            distances[String(node.label)];
+          const displayDistance = toDisplayDistance(distanceValue);
+
+          return (
+            <g key={node.id} className="transition-all duration-300">
+              {displayDistance !== '' ? (
+                <text
+                  x={point.x - nodeRadius}
+                  y={point.y - nodeRadius - 10}
+                  fontSize="22"
+                  fill="#1e88e5"
+                  fontWeight="700"
+                >
+                  {displayDistance}
+                </text>
+              ) : null}
+
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={nodeRadius}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={isActive ? 2.7 : 1.6}
+              />
+
+              <text
+                x={point.x}
+                y={point.y + 6}
+                textAnchor="middle"
+                fontSize="22"
+                fill={textColor}
+                fontWeight="700"
+              >
+                {node.label || node.id}
+              </text>
+
+              {node.caption ? (
+                <text
+                  x={point.x - nodeRadius}
+                  y={point.y + nodeRadius + 18}
+                  fontSize="14"
+                  fill="#111827"
+                  fontWeight="600"
+                >
+                  {node.caption}
+                </text>
+              ) : null}
+
+              {isVisited ? (
+                <text
+                  x={point.x - nodeRadius - 30}
+                  y={point.y}
+                  fontSize="30"
+                  fill="#ef2626"
+                  fontWeight="700"
+                >
+                  Out
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
+
+        {activeStep?.annotation || activeStep?.stateValues?.message ? (
+          <text
+            x={width - 170}
+            y={height - 24}
+            fontSize="26"
+            fill="#7c4a03"
+            fontWeight="600"
+          >
+            {activeStep.annotation || activeStep.stateValues.message}
+          </text>
+        ) : null}
+      </svg>
+    </div>
+  );
+}
+
+function GraphCanvas({ simulation, activeStep, compact }) {
+  const nodes = asArray(simulation.nodes);
+  const hasPositionedNodes =
+    nodes.length > 1 && nodes.every((node) => typeof node.x === 'number' && typeof node.y === 'number');
+
+  if (hasPositionedNodes) {
+    return <GraphSvgCanvas simulation={simulation} activeStep={activeStep} />;
+  }
+
+  return <GraphListCanvas simulation={simulation} activeStep={activeStep} compact={compact} />;
 }
 
 function TimelineCanvas({ simulation, activeStep }) {

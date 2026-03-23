@@ -23,45 +23,91 @@ const SIMULATION_TYPES = [
 
 const DEFAULT_SIMULATION_SANDBOX_CODE = `const { input, helpers } = context;
 
-const nodes = Array.isArray(input.nodes) && input.nodes.length > 0
+const rawNodes = Array.isArray(input.nodes) && input.nodes.length > 0
   ? input.nodes
-  : ['A', 'B', 'C', 'D', 'E'];
-
-const edges = Array.isArray(input.edges) && input.edges.length > 0
-  ? input.edges
   : [
-      { from: 'A', to: 'B', weight: 4 },
-      { from: 'A', to: 'C', weight: 2 },
-      { from: 'C', to: 'B', weight: 1 },
-      { from: 'B', to: 'D', weight: 5 },
-      { from: 'D', to: 'E', weight: 2 },
+      { id: '1', label: '1', caption: 'a', role: 'source', x: 0.12, y: 0.78 },
+      { id: '2', label: '2', x: 0.42, y: 0.82 },
+      { id: '3', label: '3', x: 0.40, y: 0.50 },
+      { id: '4', label: '4', x: 0.88, y: 0.48 },
+      { id: '5', label: '5', caption: 'b', x: 0.55, y: 0.16 },
+      { id: '6', label: '6', x: 0.17, y: 0.24 },
     ];
 
-const start = input.start || nodes[0];
-const target = input.target || nodes[nodes.length - 1];
+const nodes = rawNodes.map((node, index) => {
+  if (typeof node === 'string' || typeof node === 'number') {
+    const id = String(node);
+    return {
+      id,
+      label: id,
+      caption: '',
+      x: 0.12 + (index % 3) * 0.35,
+      y: 0.2 + Math.floor(index / 3) * 0.3,
+    };
+  }
+  const id = String(node.id ?? node.label ?? index + 1);
+  return {
+    id,
+    label: String(node.label ?? id),
+    caption: String(node.caption ?? ''),
+    role: String(node.role ?? ''),
+    x: typeof node.x === 'number' ? node.x : 0.5,
+    y: typeof node.y === 'number' ? node.y : 0.5,
+  };
+});
+
+const edgeList = Array.isArray(input.edges) && input.edges.length > 0
+  ? input.edges
+  : [
+      { from: '1', to: '2', weight: 7 },
+      { from: '1', to: '3', weight: 9 },
+      { from: '1', to: '6', weight: 14 },
+      { from: '2', to: '3', weight: 10 },
+      { from: '2', to: '4', weight: 15 },
+      { from: '3', to: '4', weight: 11 },
+      { from: '3', to: '6', weight: 2 },
+      { from: '4', to: '5', weight: 6 },
+      { from: '5', to: '6', weight: 9 },
+    ];
+
+const start = String(input.start || nodes[0].id);
+const target = String(input.target || nodes[nodes.length - 1].id);
 
 const adjacency = new Map();
-nodes.forEach((node) => adjacency.set(node, []));
-edges.forEach((edge) => {
-  if (!adjacency.has(edge.from)) adjacency.set(edge.from, []);
-  adjacency.get(edge.from).push(edge);
+nodes.forEach((node) => adjacency.set(node.id, []));
+edgeList.forEach((edge) => {
+  const from = String(edge.from);
+  const to = String(edge.to);
+  const weight = Number(edge.weight ?? 0);
+  if (!adjacency.has(from)) adjacency.set(from, []);
+  if (!adjacency.has(to)) adjacency.set(to, []);
+  adjacency.get(from).push({ from, to, weight });
+  if (edge.bidirectional !== false) {
+    adjacency.get(to).push({ from: to, to: from, weight });
+  }
 });
 
 const distances = {};
 const previous = {};
 const visited = new Set();
 nodes.forEach((node) => {
-  distances[node] = Infinity;
-  previous[node] = null;
+  distances[node.id] = Infinity;
+  previous[node.id] = null;
 });
 distances[start] = 0;
 
 const steps = [];
 steps.push({
-  title: 'Initialize',
-  explanation: 'Set all distances to Infinity except the source.',
+  title: 'Initialize Distances',
+  explanation: 'Set all node distances to Infinity except the source node.',
   activeNodes: [start],
-  stateValues: { distances: { ...distances }, visited: [] },
+  activeEdges: [],
+  stateValues: {
+    start,
+    target,
+    distances: { ...distances },
+    visited: [],
+  },
 });
 
 while (visited.size < nodes.length) {
@@ -69,9 +115,9 @@ while (visited.size < nodes.length) {
   let bestDistance = Infinity;
 
   nodes.forEach((node) => {
-    if (!visited.has(node) && distances[node] < bestDistance) {
-      bestDistance = distances[node];
-      current = node;
+    if (!visited.has(node.id) && distances[node.id] < bestDistance) {
+      bestDistance = distances[node.id];
+      current = node.id;
     }
   });
 
@@ -80,43 +126,44 @@ while (visited.size < nodes.length) {
 
   steps.push({
     title: 'Visit ' + current,
-    explanation: 'Pick the unvisited node with smallest tentative distance.',
+    explanation: 'Select the unvisited node with the smallest tentative distance.',
     activeNodes: [current],
+    activeEdges: [],
     stateValues: {
       current,
-      visited: [...visited],
       distances: { ...distances },
+      visited: [...visited],
     },
   });
 
-  (adjacency.get(current) || []).forEach((edge) => {
-    const nextDistance = distances[current] + (edge.weight || 0);
+  const neighbors = adjacency.get(current) || [];
+  neighbors.forEach((edge) => {
+    const nextDistance = distances[current] + edge.weight;
     if (nextDistance < (distances[edge.to] ?? Infinity)) {
       distances[edge.to] = nextDistance;
       previous[edge.to] = current;
+
       steps.push({
         title: 'Relax ' + edge.from + ' -> ' + edge.to,
-        explanation: 'Found a shorter route to ' + edge.to + '.',
+        explanation: 'Update shortest-known distance to node ' + edge.to + '.',
         activeNodes: [edge.from, edge.to],
         activeEdges: [helpers.edgeId(edge.from, edge.to)],
         stateValues: {
+          current,
           updatedNode: edge.to,
-          newDistance: nextDistance,
-          previous: current,
           distances: { ...distances },
+          visited: [...visited],
         },
       });
     }
   });
-
-  if (current === target) break;
 }
 
 const path = [];
-let pointer = target;
-while (pointer) {
-  path.unshift(pointer);
-  pointer = previous[pointer];
+let cursor = target;
+while (cursor) {
+  path.unshift(cursor);
+  cursor = previous[cursor];
 }
 
 const pathEdges = [];
@@ -124,31 +171,39 @@ for (let i = 0; i < path.length - 1; i += 1) {
   pathEdges.push(helpers.edgeId(path[i], path[i + 1]));
 }
 
-if (path.length > 0 && path[0] === start) {
+if (path.length > 1 && path[0] === start) {
   steps.push({
-    title: 'Shortest Path',
-    explanation: 'Backtrack predecessors to reconstruct the optimal path.',
+    title: 'Shortest Path Found',
+    explanation: 'Backtrack predecessor links to show the final shortest route.',
     activeNodes: path,
     activeEdges: pathEdges,
-    stateValues: { path, totalCost: distances[target] },
+    annotation: "That's all!",
+    stateValues: {
+      path,
+      totalCost: distances[target],
+      visited: [...visited],
+      distances: { ...distances },
+      message: "That's all!",
+    },
   });
 }
 
 return {
-  title: 'Programmable Dijkstra Simulation',
+  title: 'Dijkstra Interactive Animation',
   diagramType: 'GRAPH',
-  description: 'Generated from sandbox code. Replace this with any process simulation.',
-  hint: 'Return a simulation object with nodes, edges, and steps.',
+  description: 'Video-style shortest-path visualization with distance labels and Out states.',
+  hint: 'Red nodes are finalized (Out). Blue values show current best distances.',
   solutionText:
-    path.length > 0 && path[0] === start
-      ? 'Shortest path: ' + path.join(' -> ') + ' with cost ' + distances[target]
-      : 'No path from ' + start + ' to ' + target + '.',
-  nodes: nodes.map((id) => ({ id, label: id })),
-  edges: edges.map((edge) => ({
-    id: helpers.edgeId(edge.from, edge.to),
-    from: edge.from,
-    to: edge.to,
-    label: typeof edge.weight === 'number' ? String(edge.weight) : '',
+    path.length > 1 && path[0] === start
+      ? 'Shortest path to ' + target + ': ' + path.join(' -> ') + ' (cost ' + distances[target] + ')'
+      : 'No path found from ' + start + ' to ' + target + '.',
+  canvas: { width: 560, height: 400, nodeRadius: 18, padding: 28 },
+  nodes,
+  edges: edgeList.map((edge) => ({
+    id: helpers.edgeId(String(edge.from), String(edge.to)),
+    from: String(edge.from),
+    to: String(edge.to),
+    label: String(edge.weight ?? ''),
   })),
   steps,
 };`;
@@ -162,15 +217,26 @@ const defaultSimulationContent = () => ({
     enabled: true,
     inputJson: JSON.stringify(
       {
-        start: 'A',
-        target: 'E',
-        nodes: ['A', 'B', 'C', 'D', 'E'],
+        start: '1',
+        target: '5',
+        nodes: [
+          { id: '1', label: '1', caption: 'a', role: 'source', x: 0.12, y: 0.78 },
+          { id: '2', label: '2', x: 0.42, y: 0.82 },
+          { id: '3', label: '3', x: 0.40, y: 0.50 },
+          { id: '4', label: '4', x: 0.88, y: 0.48 },
+          { id: '5', label: '5', caption: 'b', x: 0.55, y: 0.16 },
+          { id: '6', label: '6', x: 0.17, y: 0.24 },
+        ],
         edges: [
-          { from: 'A', to: 'B', weight: 4 },
-          { from: 'A', to: 'C', weight: 2 },
-          { from: 'C', to: 'B', weight: 1 },
-          { from: 'B', to: 'D', weight: 5 },
-          { from: 'D', to: 'E', weight: 2 },
+          { from: '1', to: '2', weight: 7 },
+          { from: '1', to: '3', weight: 9 },
+          { from: '1', to: '6', weight: 14 },
+          { from: '2', to: '3', weight: 10 },
+          { from: '2', to: '4', weight: 15 },
+          { from: '3', to: '4', weight: 11 },
+          { from: '3', to: '6', weight: 2 },
+          { from: '4', to: '5', weight: 6 },
+          { from: '5', to: '6', weight: 9 },
         ],
       },
       null,
@@ -629,15 +695,26 @@ export default function LessonEditor() {
           code: DEFAULT_SIMULATION_SANDBOX_CODE,
           inputJson: JSON.stringify(
             {
-              start: 'A',
-              target: 'E',
-              nodes: ['A', 'B', 'C', 'D', 'E'],
+              start: '1',
+              target: '5',
+              nodes: [
+                { id: '1', label: '1', caption: 'a', role: 'source', x: 0.12, y: 0.78 },
+                { id: '2', label: '2', x: 0.42, y: 0.82 },
+                { id: '3', label: '3', x: 0.40, y: 0.50 },
+                { id: '4', label: '4', x: 0.88, y: 0.48 },
+                { id: '5', label: '5', caption: 'b', x: 0.55, y: 0.16 },
+                { id: '6', label: '6', x: 0.17, y: 0.24 },
+              ],
               edges: [
-                { from: 'A', to: 'B', weight: 4 },
-                { from: 'A', to: 'C', weight: 2 },
-                { from: 'C', to: 'B', weight: 1 },
-                { from: 'B', to: 'D', weight: 5 },
-                { from: 'D', to: 'E', weight: 2 },
+                { from: '1', to: '2', weight: 7 },
+                { from: '1', to: '3', weight: 9 },
+                { from: '1', to: '6', weight: 14 },
+                { from: '2', to: '3', weight: 10 },
+                { from: '2', to: '4', weight: 15 },
+                { from: '3', to: '4', weight: 11 },
+                { from: '3', to: '6', weight: 2 },
+                { from: '4', to: '5', weight: 6 },
+                { from: '5', to: '6', weight: 9 },
               ],
             },
             null,
