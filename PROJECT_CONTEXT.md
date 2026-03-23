@@ -28,6 +28,7 @@ Use this file as the first read for any new AI session.
 - INTERACTIVE_SIMULATION blocks include built-in state visualization panels.
 - AI prompt updated to generate notebook-ready code and stateful simulations.
 - Teachers can refine any single lesson block with AI without touching other blocks.
+- AI lesson generation now uses 3-step pipeline: Structure, Block Strategy, Full Lesson.
 
 ## Next Actions
 
@@ -36,6 +37,7 @@ Use this file as the first read for any new AI session.
 - Harden sandbox policy and library allowlist decisions.
 - Add E2E smoke checks for AI-generated simulation and code blocks.
 - Add optional one-click save after per-block AI refinement.
+- Add generation diagnostics UI (optional) to preview step outputs for teachers.
 
 ## Decisions
 
@@ -45,6 +47,14 @@ Use this file as the first read for any new AI session.
 
 <!-- SESSION_LOG_START -->
 ## Session Log
+
+### 2026-03-23 - 3-Step Lesson Generation
+- Replaced single-pass generation with 3 sequential AI steps.
+- Step 1 now builds lesson structure and section flow only.
+- Step 2 now assigns block strategy per section.
+- Step 3 now generates full blocks from structure and strategy.
+- Added normalization and fallback safeguards for malformed AI output.
+- Enforced required block coverage and end-of-lesson quiz placement.
 
 ### 2026-03-23 - Per-Block AI Editing
 - Added teacher-only backend endpoint to refine one block via AI.

@@ -129,6 +129,467 @@ const normalizeRefinedContent = (blockType, originalContent, candidate) => {
   return typeof originalContent === 'string' ? originalContent : '';
 };
 
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free';
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+const getDefaultQuizContent = () => ({
+  question: 'What is the most important idea from this lesson section?',
+  options: [
+    { text: 'Main concept and how to apply it', isCorrect: true, feedback: 'Correct. Focus on understanding and application.' },
+    { text: 'Memorizing random details only', isCorrect: false, feedback: 'Not quite. Conceptual understanding matters more.' },
+  ],
+  timeLimit: 30,
+});
+
+const getDefaultExerciseContent = () => ({
+  question: 'Choose the best explanation based on the lesson.',
+  options: [
+    { text: 'A concept-based explanation', isCorrect: true, feedback: 'Nice work. This aligns with the concept.' },
+    { text: 'An unrelated explanation', isCorrect: false, feedback: 'Try again by focusing on the lesson idea.' },
+  ],
+});
+
+const getDefaultWrittenQuizContent = () => ({
+  question: 'Explain the core idea in your own words.',
+  idealAnswer: 'A clear explanation of the central concept and one practical example.',
+});
+
+const getDefaultSimulationContent = () => ({
+  title: 'Interactive Simulation',
+  description: 'Explore the concept with a simple interactive model.',
+  hint: 'Change the control values and observe how the state changes.',
+  solutionText: 'The simulation state should update consistently with user input.',
+  html: '<div id="app"></div>',
+  css: '',
+  js: `const { app, input, helpers } = context;
+helpers.setState({ value: input.value ?? 50 }, "initial");
+
+const wrapper = helpers.el("div");
+const valueLabel = helpers.el("p", { class: "sim-subtitle" }, "");
+const slider = helpers.el("input", {
+  type: "range",
+  min: "0",
+  max: "100",
+  value: String(input.value ?? 50),
+  style: { width: "100%" },
+});
+
+const render = (value) => {
+  valueLabel.textContent = "Current value: " + value;
+  app.style.background = "linear-gradient(90deg, #dbeafe " + value + "%, #eff6ff " + value + "%)";
+  app.style.padding = "16px";
+  app.style.borderRadius = "10px";
+  helpers.setState({ value }, "slider changed");
+};
+
+slider.addEventListener("input", (e) => render(Number(e.target.value)));
+wrapper.append(valueLabel, slider);
+app.innerHTML = "";
+app.appendChild(wrapper);
+render(Number(slider.value));`,
+  libs: [],
+  height: 420,
+  inputJson: '{"value":50}',
+});
+
+const toObjectOrNull = (value) => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== 'string') {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeType = (type) => {
+  const t = String(type || '').trim().toUpperCase();
+  return ALLOWED_BLOCK_TYPES.has(t) ? t : 'TEXT';
+};
+
+const normalizeQuizLikeContent = (rawContent, blockType) => {
+  const fallback = blockType === 'QUIZ' ? getDefaultQuizContent() : getDefaultExerciseContent();
+  const content = toObjectOrNull(rawContent) || fallback;
+  const optionsSource = Array.isArray(content.options) ? content.options : fallback.options;
+
+  const options = optionsSource
+    .map((option, index) => ({
+      text: typeof option?.text === 'string' && option.text.trim() ? option.text.trim() : `Option ${index + 1}`,
+      isCorrect: Boolean(option?.isCorrect),
+      feedback:
+        typeof option?.feedback === 'string' && option.feedback.trim()
+          ? option.feedback.trim()
+          : option?.isCorrect
+          ? 'Correct.'
+          : 'Try again.',
+    }))
+    .slice(0, 6);
+
+  if (options.length < 2) {
+    options.push(...fallback.options.slice(options.length));
+  }
+
+  if (!options.some((option) => option.isCorrect)) {
+    options[0].isCorrect = true;
+  }
+
+  const normalized = {
+    question:
+      typeof content.question === 'string' && content.question.trim()
+        ? content.question.trim()
+        : fallback.question,
+    options,
+  };
+
+  if (blockType === 'QUIZ') {
+    normalized.timeLimit = Math.max(10, Number(content.timeLimit) || 30);
+  }
+
+  return normalized;
+};
+
+const normalizeSimulationContent = (rawContent) => {
+  const fallback = getDefaultSimulationContent();
+  const content = toObjectOrNull(rawContent) || fallback;
+  const libsSource = Array.isArray(content.libs) ? content.libs : fallback.libs;
+
+  return {
+    title: typeof content.title === 'string' && content.title.trim() ? content.title.trim() : fallback.title,
+    description:
+      typeof content.description === 'string' && content.description.trim()
+        ? content.description.trim()
+        : fallback.description,
+    hint: typeof content.hint === 'string' ? content.hint : fallback.hint,
+    solutionText: typeof content.solutionText === 'string' ? content.solutionText : fallback.solutionText,
+    html: typeof content.html === 'string' && content.html.trim() ? content.html : fallback.html,
+    css: typeof content.css === 'string' ? content.css : fallback.css,
+    js: typeof content.js === 'string' && content.js.trim() ? content.js : fallback.js,
+    libs: libsSource.filter((lib) => typeof lib === 'string' && /^https?:\/\/\S+$/i.test(lib)),
+    height: Math.max(280, Number(content.height) || fallback.height),
+    inputJson:
+      typeof content.inputJson === 'string'
+        ? content.inputJson
+        : JSON.stringify(content.inputJson ?? { value: 50 }),
+  };
+};
+
+const normalizeGeneratedBlock = (rawBlock) => {
+  const type = normalizeType(rawBlock?.type);
+  const rawContent = rawBlock?.content;
+
+  if (type === 'TEXT') {
+    return {
+      type,
+      content: typeof rawContent === 'string' ? rawContent : String(rawContent ?? ''),
+    };
+  }
+
+  if (type === 'DISCUSSION') {
+    return {
+      type,
+      content:
+        typeof rawContent === 'string' && rawContent.trim()
+          ? rawContent.trim()
+          : 'Discuss how this concept applies in a real-world scenario.',
+    };
+  }
+
+  if (type === 'CODE') {
+    if (rawContent && typeof rawContent === 'object' && !Array.isArray(rawContent)) {
+      const notebook = normalizeCodeNotebook(rawContent);
+      if (notebook) {
+        return { type, content: notebook };
+      }
+    }
+    return {
+      type,
+      content:
+        typeof rawContent === 'string' && rawContent.trim()
+          ? rawContent
+          : `// %%\nconsole.log("Example output for this lesson topic");`,
+    };
+  }
+
+  if (type === 'EXERCISE' || type === 'QUIZ') {
+    return {
+      type,
+      content: normalizeQuizLikeContent(rawContent, type),
+    };
+  }
+
+  if (type === 'WRITTEN_QUIZ') {
+    const fallback = getDefaultWrittenQuizContent();
+    const content = toObjectOrNull(rawContent) || fallback;
+    return {
+      type,
+      content: {
+        question:
+          typeof content.question === 'string' && content.question.trim()
+            ? content.question.trim()
+            : fallback.question,
+        idealAnswer:
+          typeof content.idealAnswer === 'string' && content.idealAnswer.trim()
+            ? content.idealAnswer.trim()
+            : fallback.idealAnswer,
+      },
+    };
+  }
+
+  if (type === 'INTERACTIVE_SIMULATION') {
+    return {
+      type,
+      content: normalizeSimulationContent(rawContent),
+    };
+  }
+
+  return { type: 'TEXT', content: '' };
+};
+
+const buildFallbackBlock = (type, topic, purpose) => {
+  const safeTopic = String(topic || 'this topic');
+  const safePurpose = String(purpose || '').trim();
+  const suffix = safePurpose ? ` (${safePurpose})` : '';
+
+  if (type === 'TEXT') {
+    return {
+      type,
+      content: `This section explains ${safeTopic}${suffix}. Focus on the core ideas and one practical example.`,
+    };
+  }
+
+  if (type === 'CODE') {
+    return {
+      type,
+      content: `// %%\nconst topic = "${safeTopic.replace(/"/g, '\\"')}";\nconsole.log("Exploring:", topic);\n\n// %%\nconsole.table([{ concept: topic, takeaway: "Apply the idea to a simple scenario." }]);`,
+    };
+  }
+
+  if (type === 'EXERCISE') {
+    return { type, content: getDefaultExerciseContent() };
+  }
+
+  if (type === 'QUIZ') {
+    return { type, content: getDefaultQuizContent() };
+  }
+
+  if (type === 'DISCUSSION') {
+    return {
+      type,
+      content: `How would you explain ${safeTopic} to a classmate using your own example?`,
+    };
+  }
+
+  if (type === 'WRITTEN_QUIZ') {
+    return { type, content: getDefaultWrittenQuizContent() };
+  }
+
+  if (type === 'INTERACTIVE_SIMULATION') {
+    return { type, content: getDefaultSimulationContent() };
+  }
+
+  return { type: 'TEXT', content: `Let's explore ${safeTopic}.` };
+};
+
+const enforceRequiredBlockCoverage = (blocks, topic) => {
+  const nextBlocks = [...blocks];
+  const hasType = (type) => nextBlocks.some((block) => block.type === type);
+
+  if (!hasType('CODE')) {
+    nextBlocks.push(buildFallbackBlock('CODE', topic, 'auto-added coverage'));
+  }
+  if (!hasType('EXERCISE')) {
+    nextBlocks.push(buildFallbackBlock('EXERCISE', topic, 'auto-added coverage'));
+  }
+  if (!hasType('INTERACTIVE_SIMULATION')) {
+    nextBlocks.push(buildFallbackBlock('INTERACTIVE_SIMULATION', topic, 'auto-added coverage'));
+  }
+  if (!hasType('QUIZ')) {
+    nextBlocks.push(buildFallbackBlock('QUIZ', topic, 'final check'));
+  }
+
+  const firstQuizIndex = nextBlocks.findIndex((block) => block.type === 'QUIZ');
+  if (firstQuizIndex !== -1 && firstQuizIndex < nextBlocks.length - 2) {
+    const [quizBlock] = nextBlocks.splice(firstQuizIndex, 1);
+    nextBlocks.push(quizBlock);
+  }
+
+  return nextBlocks;
+};
+
+const normalizeStructurePlan = (raw, topic, targetDuration) => {
+  const fallbackSections = [
+    { id: 'section-1', title: 'Introduction', goal: `Introduce ${topic}`, keyPoints: [`What is ${topic}?`] },
+    { id: 'section-2', title: 'Core Concepts', goal: `Explain core ideas in ${topic}`, keyPoints: ['Core principle 1', 'Core principle 2'] },
+    { id: 'section-3', title: 'Guided Practice', goal: `Practice ${topic}`, keyPoints: ['Worked example', 'Common mistakes'] },
+    { id: 'section-4', title: 'Assessment & Wrap-Up', goal: `Check understanding of ${topic}`, keyPoints: ['Quick recap', 'Exit check'] },
+  ];
+
+  const sourceSections = Array.isArray(raw?.sections) && raw.sections.length > 0 ? raw.sections : fallbackSections;
+  const safeDuration = Math.max(10, Number(targetDuration) || 30);
+  const perSection = Math.max(5, Math.round(safeDuration / sourceSections.length));
+
+  return {
+    lessonTitle:
+      typeof raw?.lessonTitle === 'string' && raw.lessonTitle.trim()
+        ? raw.lessonTitle.trim()
+        : `Lesson on ${topic}`,
+    objectives: Array.isArray(raw?.objectives)
+      ? raw.objectives.map((objective) => String(objective)).filter(Boolean).slice(0, 6)
+      : [`Understand the key idea behind ${topic}`, `Apply ${topic} in one practical situation`],
+    sections: sourceSections.map((section, index) => ({
+      id:
+        typeof section?.id === 'string' && section.id.trim()
+          ? section.id.trim()
+          : `section-${index + 1}`,
+      title:
+        typeof section?.title === 'string' && section.title.trim()
+          ? section.title.trim()
+          : `Section ${index + 1}`,
+      goal:
+        typeof section?.goal === 'string' && section.goal.trim()
+          ? section.goal.trim()
+          : `Teach section ${index + 1} of ${topic}`,
+      durationMinutes: Math.max(3, Number(section?.durationMinutes) || perSection),
+      keyPoints: Array.isArray(section?.keyPoints)
+        ? section.keyPoints.map((point) => String(point)).filter(Boolean).slice(0, 6)
+        : [],
+    })),
+  };
+};
+
+const normalizeBlockStrategyPlan = (raw, structurePlan) => {
+  const indexById = new Map(structurePlan.sections.map((section, index) => [section.id, index]));
+  const sections = structurePlan.sections.map((section, index) => {
+    const rawSection = Array.isArray(raw?.sections)
+      ? raw.sections.find((candidate) => candidate && candidate.id === section.id)
+      : null;
+
+    const fallbackTypes =
+      index === 0
+        ? ['TEXT']
+        : index === structurePlan.sections.length - 1
+        ? ['EXERCISE', 'QUIZ']
+        : ['TEXT'];
+
+    const rawBlocks = Array.isArray(rawSection?.blocks) ? rawSection.blocks : fallbackTypes.map((type) => ({ type }));
+    const blocks = rawBlocks
+      .map((block) => ({
+        type: normalizeType(block?.type),
+        purpose: typeof block?.purpose === 'string' ? block.purpose : '',
+      }))
+      .filter((block) => ALLOWED_BLOCK_TYPES.has(block.type));
+
+    return {
+      id: section.id,
+      title: section.title,
+      blocks: blocks.length > 0 ? blocks : fallbackTypes.map((type) => ({ type, purpose: '' })),
+    };
+  });
+
+  const ensureInSection = (sectionIndex, blockType, purpose) => {
+    if (sections.some((section) => section.blocks.some((block) => block.type === blockType))) {
+      return;
+    }
+    const targetIndex = Math.max(0, Math.min(sectionIndex, sections.length - 1));
+    sections[targetIndex].blocks.push({ type: blockType, purpose: purpose || '' });
+  };
+
+  ensureInSection(1, 'CODE', 'Demonstrate concept through runnable example');
+  ensureInSection(Math.max(1, sections.length - 2), 'EXERCISE', 'Check understanding before the end');
+  ensureInSection(Math.max(1, sections.length - 2), 'INTERACTIVE_SIMULATION', 'Interactive visualization of state changes');
+  ensureInSection(sections.length - 1, 'QUIZ', 'End-of-lesson assessment');
+
+  // Keep QUIZ near the end.
+  sections.forEach((section, sectionIndex) => {
+    if (sectionIndex < sections.length - 1) {
+      section.blocks = section.blocks.filter((block) => block.type !== 'QUIZ');
+    }
+  });
+  ensureInSection(sections.length - 1, 'QUIZ', 'End-of-lesson assessment');
+
+  return {
+    lessonTitle:
+      typeof raw?.lessonTitle === 'string' && raw.lessonTitle.trim()
+        ? raw.lessonTitle.trim()
+        : structurePlan.lessonTitle,
+    sections,
+    sectionOrder: structurePlan.sections.map((section) => section.id),
+    indexById,
+  };
+};
+
+const normalizeFinalLessonData = (raw, structurePlan, strategyPlan, topic) => {
+  const title =
+    typeof raw?.title === 'string' && raw.title.trim()
+      ? raw.title.trim()
+      : structurePlan.lessonTitle || `Lesson on ${topic}`;
+
+  let blocks = [];
+
+  if (Array.isArray(raw?.blocks) && raw.blocks.length > 0) {
+    blocks = raw.blocks.map(normalizeGeneratedBlock);
+  } else {
+    const fallbackBlocks = [];
+    strategyPlan.sections.forEach((section) => {
+      section.blocks.forEach((block) => {
+        fallbackBlocks.push(buildFallbackBlock(block.type, topic, block.purpose || section.title));
+      });
+    });
+    blocks = fallbackBlocks.map(normalizeGeneratedBlock);
+  }
+
+  if (blocks.length === 0) {
+    blocks = [
+      normalizeGeneratedBlock(buildFallbackBlock('TEXT', topic, 'introduction')),
+      normalizeGeneratedBlock(buildFallbackBlock('CODE', topic, 'example')),
+      normalizeGeneratedBlock(buildFallbackBlock('EXERCISE', topic, 'practice')),
+      normalizeGeneratedBlock(buildFallbackBlock('INTERACTIVE_SIMULATION', topic, 'simulation')),
+      normalizeGeneratedBlock(buildFallbackBlock('QUIZ', topic, 'assessment')),
+    ];
+  }
+
+  blocks = enforceRequiredBlockCoverage(blocks, topic);
+
+  return { title, blocks };
+};
+
+const callOpenRouterForJson = async ({ systemPrompt, userPrompt }) => {
+  const openRouterRes = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'http://localhost:5173',
+      'X-Title': 'Academic Atelier',
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+    }),
+  });
+
+  if (!openRouterRes.ok) {
+    const errorText = await openRouterRes.text();
+    throw new Error(`OpenRouter API Error: ${errorText}`);
+  }
+
+  const data = await openRouterRes.json();
+  const messageContent = data?.choices?.[0]?.message?.content || '';
+  const parsed = extractJsonPayload(messageContent);
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('OpenRouter returned invalid JSON payload');
+  }
+  return parsed;
+};
+
 // Get lessons for a class
 router.get('/class/:classId', authenticateToken, async (req, res) => {
   try {
@@ -172,99 +633,153 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.post('/generate', authenticateToken, requireTeacher, async (req, res) => {
   try {
     const { topic, gradeLevel, targetDuration, referenceContent } = req.body;
-    
+
     if (!process.env.OPENROUTER_API_KEY) {
       return res.status(500).json({ error: 'OpenRouter API key is missing from environment variables' });
     }
 
-    const systemPrompt = `You are a curriculum designer. Generate a highly interactive lesson in JSON format for the topic: "${topic}".
+    const safeTopic = String(topic || '').trim() || 'Untitled Topic';
+    const audience = String(gradeLevel || 'High School / College').trim();
+    const durationMinutes = Math.max(10, Number(targetDuration) || 30);
+    const reference = String(referenceContent || '').trim();
 
-    Return exactly one JSON object with this top-level shape:
+    // Step 1 — Structure: lesson outline and section flow.
+    const structureSystemPrompt = `You are a curriculum architect.
+Create only the high-level lesson structure.
+
+Return ONLY valid JSON with this shape:
+{
+  "lessonTitle": "string",
+  "objectives": ["string"],
+  "sections": [
     {
+      "id": "section-1",
       "title": "string",
-      "blocks": [ ... ]
+      "goal": "string",
+      "durationMinutes": 8,
+      "keyPoints": ["string"]
     }
+  ]
+}
 
-    Use only these block types:
-    1. "TEXT": Thorough explanations with clear headings.
-    2. "CODE": Notebook-ready JavaScript. Use plain text code (no markdown fences). For multiple runnable sections, separate cells with lines that start with "// %%".
-    3. "EXERCISE": Mid-lesson MCQ checks. Each option must include "feedback".
-    4. "QUIZ": End-of-lesson competitive MCQ questions.
-    5. "DISCUSSION": Thought-provoking prompts.
-    6. "INTERACTIVE_SIMULATION": Flat HTML/CSS/JS simulation payload for a sandboxed iframe.
+Rules:
+- 3 to 6 sections.
+- Keep section flow logical from introduction to assessment.
+- Do not generate detailed block content in this step.
+- Do not include markdown or commentary.`;
 
-    INTERACTIVE_SIMULATION content MUST be a flat object with this schema:
-    {
-      "title": "Simulation title",
-      "description": "What this simulation teaches",
-      "hint": "Guidance for students",
-      "solutionText": "Expected insight or final result",
-      "html": "<div id=\\"app\\"></div>",
-      "css": "/* custom CSS */",
-      "js": "const { app, input, helpers } = context;\\n// Render into app",
-      "libs": ["https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"],
-      "height": 420,
-      "inputJson": "{\\"key\\":\\"value\\"}"
-    }
+    const structureUserPrompt = `Topic: ${safeTopic}
+Target audience: ${audience}
+Target duration (minutes): ${durationMinutes}
+${reference ? `Reference content:\n${reference}` : 'Reference content: none'}`;
 
-    Simulation constraints:
-    - Keep code deterministic, safe, and classroom appropriate.
-    - Use browser JavaScript only.
-    - The runtime provides context.app, context.input, and context.helpers.
-    - Use built-in helpers for clear state visualization:
-      - context.helpers.setState({ ... }, "label")
-      - context.helpers.replaceState({ ... }, "label")
-      - context.helpers.emitStep("label", { ... })
-      - context.helpers.log("message")
-    - Include obvious controls in the simulation UI (buttons/sliders/inputs) and visually reflect changing state.
-    - Keep simulation configuration minimal and easy to read.
-    - Do NOT use deprecated fields: canvasSandbox, sandbox, diagramType, nodes, edges, or steps.
-
-    CODE block constraints:
-    - Must run directly in a browser JavaScript runtime.
-    - May use direct ESM imports from URLs or package names (for example: import * as d3 from "d3";).
-    - Keep setup minimal so students can run and modify instantly.
-
-    Content quality constraints:
-    - Include a balanced sequence of explanation, practice, and assessment.
-    - Include at least one EXERCISE, one CODE block, and one INTERACTIVE_SIMULATION block.
-    - Put QUIZ blocks near the end of the lesson.
-
-    Target Audience: ${gradeLevel || 'High School / College'}
-    Estimated Time: ${targetDuration || '30'} minutes.
-    ${referenceContent ? 'Reference Content to use: ' + referenceContent : ''}
-
-    Return ONLY valid JSON.
-    Do NOT include markdown, code fences, or commentary.`;
-
-    const openRouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:5173",
-        "X-Title": "Academic Atelier"
-      },
-      body: JSON.stringify({
-        model: "nvidia/nemotron-3-super-120b-a12b:free",
-        messages: [{ role: "system", content: systemPrompt }]
-      })
+    const rawStructurePlan = await callOpenRouterForJson({
+      systemPrompt: structureSystemPrompt,
+      userPrompt: structureUserPrompt,
     });
+    const structurePlan = normalizeStructurePlan(rawStructurePlan, safeTopic, durationMinutes);
 
-    if (!openRouterRes.ok) {
-      const errorText = await openRouterRes.text();
-      throw new Error(`OpenRouter API Error: ${errorText}`);
+    // Step 2 — Block Strategy: decide where each block type goes.
+    const blockStrategySystemPrompt = `You are a lesson planner.
+You will receive a lesson structure and must assign block types to each section.
+
+Allowed block types only:
+TEXT, CODE, EXERCISE, QUIZ, DISCUSSION, WRITTEN_QUIZ, INTERACTIVE_SIMULATION
+
+Return ONLY valid JSON with this shape:
+{
+  "lessonTitle": "string",
+  "sections": [
+    {
+      "id": "section-1",
+      "title": "string",
+      "blocks": [
+        { "type": "TEXT", "purpose": "string" }
+      ]
     }
+  ]
+}
 
-    const data = await openRouterRes.json();
-    let messageContent = data.choices[0].message.content.trim();
-    
-    // Attempt to extract JSON if the model ignored instructions and wrapped in markdown
-    if (messageContent.startsWith('```')) {
-      messageContent = messageContent.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```$/, '').trim();
-    }
+Rules:
+- Keep QUIZ near the end.
+- Include at least one CODE, one EXERCISE, and one INTERACTIVE_SIMULATION across the lesson.
+- Keep each section focused; usually 1-3 blocks per section.
+- Do not include detailed block content in this step.
+- Do not include markdown or commentary.`;
 
-    const lessonData = JSON.parse(messageContent);
+    const blockStrategyUserPrompt = `Topic: ${safeTopic}
+Target audience: ${audience}
+Target duration (minutes): ${durationMinutes}
+Lesson structure JSON:
+${JSON.stringify(structurePlan, null, 2)}
+${reference ? `Reference content:\n${reference}` : 'Reference content: none'}`;
+
+    const rawBlockStrategy = await callOpenRouterForJson({
+      systemPrompt: blockStrategySystemPrompt,
+      userPrompt: blockStrategyUserPrompt,
+    });
+    const strategyPlan = normalizeBlockStrategyPlan(rawBlockStrategy, structurePlan);
+
+    // Step 3 — Full Lesson: generate detailed content based on structure + block strategy.
+    const fullLessonSystemPrompt = `You are a curriculum content generator.
+Generate the full lesson content based on the provided structure and block strategy.
+
+Return ONLY valid JSON with this exact top-level shape:
+{
+  "title": "string",
+  "blocks": [
+    { "type": "TEXT", "content": "..." }
+  ]
+}
+
+Use only these block types:
+1. TEXT
+2. CODE
+3. EXERCISE
+4. QUIZ
+5. DISCUSSION
+6. WRITTEN_QUIZ
+7. INTERACTIVE_SIMULATION
+
+Block content requirements:
+- TEXT: clear, concise explanation text.
+- CODE: notebook-ready JavaScript as plain string. For multiple runnable sections, separate with lines that start with "// %%".
+- EXERCISE: object with "question" and "options"; each option includes "text", "isCorrect", and "feedback".
+- QUIZ: object with "question", "options", and "timeLimit".
+- DISCUSSION: thought-provoking prompt string.
+- WRITTEN_QUIZ: object with "question" and "idealAnswer".
+- INTERACTIVE_SIMULATION: object with:
+  "title","description","hint","solutionText","html","css","js","libs","height","inputJson"
+  Use context.app, context.input, context.helpers in js.
+
+Quality requirements:
+- Keep content classroom-safe and deterministic.
+- Match the given section order and block placement.
+- Do not include markdown fences or commentary.`;
+
+    const fullLessonUserPrompt = `Topic: ${safeTopic}
+Target audience: ${audience}
+Target duration (minutes): ${durationMinutes}
+Lesson structure JSON:
+${JSON.stringify(structurePlan, null, 2)}
+
+Block strategy JSON:
+${JSON.stringify(
+  {
+    lessonTitle: strategyPlan.lessonTitle,
+    sections: strategyPlan.sections,
+  },
+  null,
+  2
+)}
+${reference ? `\nReference content:\n${reference}` : ''}`;
+
+    const rawFullLesson = await callOpenRouterForJson({
+      systemPrompt: fullLessonSystemPrompt,
+      userPrompt: fullLessonUserPrompt,
+    });
+    const lessonData = normalizeFinalLessonData(rawFullLesson, structurePlan, strategyPlan, safeTopic);
+
     res.json(lessonData);
   } catch (err) {
     console.error('AI Generation Error:', err);
