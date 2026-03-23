@@ -41,8 +41,12 @@ api.interceptors.response.use(
 );
 
 export const authService = {
-  login: async (email, password) => {
-    const response = await api.post('/auth/login', { email, password });
+  login: async (email, password, role) => {
+    const payload = { email, password };
+    if (role === 'TEACHER' || role === 'STUDENT') {
+      payload.role = role;
+    }
+    const response = await api.post('/auth/login', payload);
     if (response.data.token) {
       localStorage.setItem('token', response.data.token);
       persistUser(response.data.user);

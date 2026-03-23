@@ -37,7 +37,7 @@ export default function LoginPage() {
       if (isRegistering) {
         await register({ name, email, password, role });
       } else {
-        await login(email, password);
+        await login(email, password, role);
       }
       navigate('/dashboard');
     } catch (err) {

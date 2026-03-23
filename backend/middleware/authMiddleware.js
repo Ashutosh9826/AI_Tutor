@@ -7,9 +7,23 @@ function authenticateToken(req, res, next) {
 
   if (!token) return res.status(401).json({ error: 'Access token required' });
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, (err, payload) => {
     if (err) return res.status(403).json({ error: 'Invalid or expired token' });
-    req.user = user;
+
+    // Backward-compatible payload support:
+    // older tokens may carry "id" instead of "userId".
+    const normalizedUserId = payload?.userId || payload?.id || null;
+    const normalizedRole = payload?.role || null;
+
+    if (!normalizedUserId || !normalizedRole) {
+      return res.status(401).json({ error: 'Invalid token payload. Please sign in again.' });
+    }
+
+    req.user = {
+      ...payload,
+      userId: normalizedUserId,
+      role: normalizedRole,
+    };
     next();
   });
 }

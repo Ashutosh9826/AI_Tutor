@@ -68,7 +68,8 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, role } = req.body;
+    const requestedRole = role === 'TEACHER' || role === 'STUDENT' ? role : null;
 
     // Find user
     const user = await prisma.user.findUnique({
@@ -77,6 +78,12 @@ router.post('/login', async (req, res) => {
 
     if (!user || (!user.password && password)) {
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    if (requestedRole && user.role !== requestedRole) {
+      return res.status(403).json({
+        error: `This account is registered as ${user.role}. Switch the role toggle to ${user.role} or use a different account.`,
+      });
     }
 
     // Check password
@@ -129,6 +136,10 @@ router.post('/google', async (req, res) => {
           role: userRole,
           // No password for Google-only users
         },
+      });
+    } else if (user.role !== userRole) {
+      return res.status(403).json({
+        error: `This account is registered as ${user.role}. Select ${user.role} to continue with Google sign-in.`,
       });
     }
 

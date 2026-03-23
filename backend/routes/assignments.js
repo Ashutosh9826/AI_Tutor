@@ -10,6 +10,10 @@ router.get('/class/:classId', authenticateToken, async (req, res) => {
   try {
     const { classId } = req.params;
     const { userId, role } = req.user;
+    if (!userId) {
+      return res.status(401).json({ error: 'Invalid session. Please sign in again.' });
+    }
+
     const assignments = await prisma.assignment.findMany({
       where: { class_id: classId },
       orderBy: { due_date: 'asc' },
@@ -47,6 +51,10 @@ router.get('/class/:classId', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    if (!req.user?.userId) {
+      return res.status(401).json({ error: 'Invalid session. Please sign in again.' });
+    }
+
     const assignment = await prisma.assignment.findUnique({
       where: { id },
       include: {
