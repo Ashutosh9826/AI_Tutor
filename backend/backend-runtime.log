@@ -10,3 +10,30 @@ requireTeacher check: {
   iat: 1774266707,
   exp: 1774353107
 }
+requireTeacher check: {
+  userId: '915a93d5-a01b-4f97-9262-6f219f002023',
+  role: 'TEACHER',
+  iat: 1774266707,
+  exp: 1774353107
+}
+requireTeacher check: {
+  userId: '915a93d5-a01b-4f97-9262-6f219f002023',
+  role: 'TEACHER',
+  iat: 1774266707,
+  exp: 1774353107
+}
+requireTeacher check: {
+  userId: '915a93d5-a01b-4f97-9262-6f219f002023',
+  role: 'TEACHER',
+  iat: 1774266707,
+  exp: 1774353107
+}
+requireTeacher check: {
+  userId: '915a93d5-a01b-4f97-9262-6f219f002023',
+  role: 'TEACHER',
+  iat: 1774266707,
+  exp: 1774353107
+}
+A user connected: 6AgshcPCSR7wQ3jzAAAC
+User 6AgshcPCSR7wQ3jzAAAC joined lesson 37515c77-b340-4c9b-9955-4660cf614b13
+User disconnected: 6AgshcPCSR7wQ3jzAAAC
