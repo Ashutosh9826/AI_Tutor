@@ -27,6 +27,7 @@ Use this file as the first read for any new AI session.
 - Live lessons allow students to edit and run code instantly.
 - INTERACTIVE_SIMULATION blocks include built-in state visualization panels.
 - AI prompt updated to generate notebook-ready code and stateful simulations.
+- Teachers can refine any single lesson block with AI without touching other blocks.
 
 ## Next Actions
 
@@ -34,6 +35,7 @@ Use this file as the first read for any new AI session.
 - Verify multi-user live lesson behavior for per-student local code edits.
 - Harden sandbox policy and library allowlist decisions.
 - Add E2E smoke checks for AI-generated simulation and code blocks.
+- Add optional one-click save after per-block AI refinement.
 
 ## Decisions
 
@@ -43,6 +45,14 @@ Use this file as the first read for any new AI session.
 
 <!-- SESSION_LOG_START -->
 ## Session Log
+
+### 2026-03-23 - Per-Block AI Editing
+- Added teacher-only backend endpoint to refine one block via AI.
+- Enforced single-block scope and block-type schema normalization.
+- Added `lessonService.refineBlockAi` frontend API method.
+- Added per-block AI button in lesson editor block controls.
+- Added instruction modal to apply AI changes to only selected block.
+- Kept existing manual Save flow; no other blocks are modified.
 
 ### 2026-03-23 - Notebook and Simulation Upgrade
 - Rebuilt CODE block into sandboxed multi-cell browser notebook runtime.

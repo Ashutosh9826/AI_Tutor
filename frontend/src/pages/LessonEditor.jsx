@@ -123,6 +123,10 @@ export default function LessonEditor() {
 
   // AI Assistant menu toggle
   const [showAiMenu, setShowAiMenu] = useState(false);
+  const [aiEditTargetId, setAiEditTargetId] = useState(null);
+  const [aiEditInstructions, setAiEditInstructions] = useState('');
+  const [aiEditLoading, setAiEditLoading] = useState(false);
+  const [aiEditError, setAiEditError] = useState('');
   
   // Code execution is now handled inside CodeNotebookBlock (sandboxed iframe)
 
@@ -224,6 +228,54 @@ export default function LessonEditor() {
 
   const deleteBlock = (localId) => {
     setBlocks((prev) => prev.filter((b) => b.localId !== localId));
+  };
+
+  const openAiRefineModal = (localId) => {
+    setAiEditTargetId(localId);
+    setAiEditInstructions('');
+    setAiEditError('');
+  };
+
+  const closeAiRefineModal = () => {
+    if (aiEditLoading) return;
+    setAiEditTargetId(null);
+    setAiEditInstructions('');
+    setAiEditError('');
+  };
+
+  const handleAiRefineBlock = async (e) => {
+    e.preventDefault();
+    if (!aiEditTargetId || !lessonId) return;
+
+    const targetBlock = blocks.find((b) => b.localId === aiEditTargetId);
+    if (!targetBlock) {
+      setAiEditError('Selected block is no longer available.');
+      return;
+    }
+
+    try {
+      setAiEditLoading(true);
+      setAiEditError('');
+
+      const result = await lessonService.refineBlockAi(lessonId, {
+        blockType: targetBlock.type,
+        blockContent: targetBlock.content,
+        instructions: aiEditInstructions,
+      });
+
+      if (!Object.prototype.hasOwnProperty.call(result || {}, 'content')) {
+        throw new Error('AI returned an invalid response for this block');
+      }
+
+      updateBlock(targetBlock.localId, result.content);
+      setAiEditTargetId(null);
+      setAiEditInstructions('');
+      setAiEditError('');
+    } catch (err) {
+      setAiEditError(err.response?.data?.error || err.message || 'Failed to refine this block with AI');
+    } finally {
+      setAiEditLoading(false);
+    }
   };
 
   const moveBlock = (index, direction) => {
@@ -510,10 +562,12 @@ export default function LessonEditor() {
   const BlockControls = ({ index, localId, dark = false }) => (
     <div className={`absolute -left-12 top-1/2 -translate-y-1/2 flex flex-col gap-0 opacity-0 group-hover:opacity-100 transition-opacity bg-surface p-1 rounded-full shadow-sm border border-outline-variant/30 ${dark ? 'bg-[#2c2c2c] border-white/10' : ''}`}>
       <button onClick={() => moveBlock(index, -1)} disabled={index === 0} className={`p-1.5 rounded-full hover:bg-primary/10 transition-colors disabled:opacity-30 ${dark ? 'text-white' : 'text-on-surface'}`}><span className="material-symbols-outlined text-[1rem]">arrow_upward</span></button>
+      <button onClick={() => openAiRefineModal(localId)} className="p-1.5 rounded-full hover:bg-secondary/10 hover:text-secondary text-on-surface-variant transition-colors" title="Refine this block with AI"><span className="material-symbols-outlined text-[1rem]">auto_fix_high</span></button>
       <button onClick={() => deleteBlock(localId)} className="p-1.5 rounded-full hover:bg-error/10 hover:text-error text-on-surface-variant transition-colors"><span className="material-symbols-outlined text-[1rem]">delete</span></button>
       <button onClick={() => moveBlock(index, 1)} disabled={index === blocks.length - 1} className={`p-1.5 rounded-full hover:bg-primary/10 transition-colors disabled:opacity-30 ${dark ? 'text-white' : 'text-on-surface'}`}><span className="material-symbols-outlined text-[1rem]">arrow_downward</span></button>
     </div>
   );
+  const aiTargetBlock = aiEditTargetId ? blocks.find((b) => b.localId === aiEditTargetId) : null;
 
   if (loading) {
     return <div className="bg-surface text-on-surface min-h-screen flex items-center justify-center">Loading editor...</div>;
@@ -617,6 +671,64 @@ export default function LessonEditor() {
           </div>
         </main>
       </div>
+
+      {aiTargetBlock && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 backdrop-blur-sm" onClick={closeAiRefineModal}>
+          <div className="w-full max-w-xl mx-4 rounded-2xl bg-white shadow-2xl border border-outline-variant/20 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <p className="text-xs uppercase tracking-widest font-bold text-secondary mb-1">AI Block Editor</p>
+                <h3 className="text-xl font-bold text-on-surface">Refine This {aiTargetBlock.type} Block</h3>
+                <p className="text-sm text-on-surface-variant mt-1">
+                  AI will only edit this block. Other blocks stay unchanged.
+                </p>
+              </div>
+              <button type="button" onClick={closeAiRefineModal} disabled={aiEditLoading} className="text-on-surface-variant hover:text-on-surface">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleAiRefineBlock} className="space-y-4">
+              <div>
+                <label className="block text-[11px] uppercase tracking-widest font-bold text-outline mb-2">
+                  What should improve?
+                </label>
+                <textarea
+                  value={aiEditInstructions}
+                  onChange={(e) => setAiEditInstructions(e.target.value)}
+                  placeholder="Example: Make this simpler for grade 8, add one practical example, keep it short."
+                  rows={5}
+                  className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-3 text-sm outline-none focus:border-secondary resize-y"
+                />
+              </div>
+
+              {aiEditError && (
+                <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                  {aiEditError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={closeAiRefineModal}
+                  disabled={aiEditLoading}
+                  className="px-4 py-2 rounded-full border border-outline-variant/40 text-on-surface font-semibold hover:bg-surface-container-low transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={aiEditLoading}
+                  className="px-5 py-2 rounded-full bg-secondary text-white font-semibold shadow hover:shadow-md transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {aiEditLoading ? 'Refining...' : 'Apply AI Refinement'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       
       {/* AI Assistant Floating Menu */}
       <div className="fixed bottom-8 right-8 flex flex-col items-end z-[60]">

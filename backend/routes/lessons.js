@@ -4,6 +4,130 @@ const { PrismaClient } = require('@prisma/client');
 const { authenticateToken, requireTeacher } = require('../middleware/authMiddleware');
 
 const prisma = new PrismaClient();
+const JSON_CONTENT_BLOCK_TYPES = new Set([
+  'QUIZ',
+  'EXERCISE',
+  'WRITTEN_QUIZ',
+  'INTERACTIVE_SIMULATION',
+]);
+
+const ALLOWED_BLOCK_TYPES = new Set([
+  'TEXT',
+  'CODE',
+  'EXERCISE',
+  'QUIZ',
+  'DISCUSSION',
+  'WRITTEN_QUIZ',
+  'INTERACTIVE_SIMULATION',
+]);
+
+const extractJsonPayload = (rawText) => {
+  let cleaned = String(rawText || '').trim();
+  if (!cleaned) return null;
+
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/, '')
+      .replace(/```$/, '')
+      .trim();
+  }
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    return null;
+  }
+};
+
+const parsePossiblyJson = (value) => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== 'string') {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeCodeNotebook = (candidate) => {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    return null;
+  }
+
+  if (!Array.isArray(candidate.cells)) {
+    return null;
+  }
+
+  const normalizedCells = candidate.cells.map((cell, index) => ({
+    id:
+      typeof cell?.id === 'string' && cell.id.trim()
+        ? cell.id.trim()
+        : `cell-${index + 1}`,
+    title:
+      typeof cell?.title === 'string' && cell.title.trim()
+        ? cell.title.trim()
+        : `Cell ${index + 1}`,
+    code: typeof cell?.code === 'string' ? cell.code : '',
+  }));
+
+  return {
+    version: Number(candidate.version) || 1,
+    language: typeof candidate.language === 'string' ? candidate.language : 'javascript',
+    runtime: typeof candidate.runtime === 'string' ? candidate.runtime : 'browser-js',
+    cells: normalizedCells.length > 0 ? normalizedCells : [{ id: 'cell-1', title: 'Cell 1', code: '' }],
+  };
+};
+
+const normalizeRefinedContent = (blockType, originalContent, candidate) => {
+  if (blockType === 'CODE') {
+    const originalAsNotebook = parsePossiblyJson(originalContent);
+    const originalWasNotebook = Boolean(originalAsNotebook && Array.isArray(originalAsNotebook.cells));
+
+    if (originalWasNotebook) {
+      const normalized = normalizeCodeNotebook(candidate);
+      if (normalized) return normalized;
+
+      if (typeof candidate === 'string') {
+        return {
+          version: 1,
+          language: 'javascript',
+          runtime: 'browser-js',
+          cells: [{ id: 'cell-1', title: 'Cell 1', code: candidate }],
+        };
+      }
+
+      return originalAsNotebook;
+    }
+
+    if (typeof candidate === 'string') {
+      return candidate;
+    }
+
+    const normalized = normalizeCodeNotebook(candidate);
+    if (normalized) return normalized;
+
+    return typeof originalContent === 'string' ? originalContent : '';
+  }
+
+  if (JSON_CONTENT_BLOCK_TYPES.has(blockType)) {
+    if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+      return candidate;
+    }
+    const fallback = parsePossiblyJson(originalContent);
+    return fallback || {};
+  }
+
+  if (typeof candidate === 'string') {
+    return candidate;
+  }
+  return typeof originalContent === 'string' ? originalContent : '';
+};
 
 // Get lessons for a class
 router.get('/class/:classId', authenticateToken, async (req, res) => {
@@ -145,6 +269,114 @@ router.post('/generate', authenticateToken, requireTeacher, async (req, res) => 
   } catch (err) {
     console.error('AI Generation Error:', err);
     res.status(500).json({ error: 'Failed to generate lesson with AI' });
+  }
+});
+
+// Refine one lesson block with AI (Teacher only, affects only provided block content)
+router.post('/:id/refine-block', authenticateToken, requireTeacher, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.user;
+    const { blockType, blockContent, instructions } = req.body;
+
+    if (!ALLOWED_BLOCK_TYPES.has(blockType)) {
+      return res.status(400).json({ error: 'Unsupported block type for AI refinement' });
+    }
+
+    if (!process.env.OPENROUTER_API_KEY) {
+      return res.status(500).json({ error: 'OpenRouter API key is missing from environment variables' });
+    }
+
+    const lesson = await prisma.lesson.findUnique({
+      where: { id },
+      include: { class: true },
+    });
+
+    if (!lesson) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+
+    if (lesson.class.teacher_id !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    if (lesson.class.is_archived) {
+      return res.status(400).json({ error: 'Cannot edit lessons in an archived class' });
+    }
+
+    const currentContent =
+      typeof blockContent === 'object' ? JSON.stringify(blockContent, null, 2) : String(blockContent || '');
+
+    const systemPrompt = `You are an expert curriculum editor helping a teacher improve exactly one lesson block.
+
+Hard requirements:
+1. Edit ONLY the provided block content.
+2. Never reference other lesson blocks.
+3. Keep the same blockType.
+4. Keep output concise, classroom-ready, and aligned to teacher instructions.
+5. Return ONLY valid JSON with this shape: {"content": ...}
+
+Block type schema rules:
+- TEXT: content must be a string.
+- DISCUSSION: content must be a short discussion prompt string.
+- CODE: content can be either:
+  a) string JavaScript code, or
+  b) notebook object: {"version":1,"language":"javascript","runtime":"browser-js","cells":[{"id":"...","title":"...","code":"..."}]}
+- EXERCISE or QUIZ: content object with "question", "options" (array), and optional "timeLimit". Each option should keep "text", "isCorrect", and "feedback" when relevant.
+- WRITTEN_QUIZ: content object with "question" and "idealAnswer".
+- INTERACTIVE_SIMULATION: content object with:
+  "title","description","hint","solutionText","html","css","js","libs","height","inputJson".
+  Use context.app, context.input, context.helpers in js.
+
+Output must be JSON only, without markdown fences or commentary.`;
+
+    const userPrompt = `Lesson title: ${lesson.title}
+Block type: ${blockType}
+Teacher instructions: ${String(instructions || '').trim() || 'Improve clarity and quality while preserving intent.'}
+
+Current block content:
+${currentContent}`;
+
+    const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'http://localhost:5173',
+        'X-Title': 'Academic Atelier',
+      },
+      body: JSON.stringify({
+        model: 'nvidia/nemotron-3-super-120b-a12b:free',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      }),
+    });
+
+    if (!openRouterRes.ok) {
+      const errorText = await openRouterRes.text();
+      throw new Error(`OpenRouter API Error: ${errorText}`);
+    }
+
+    const data = await openRouterRes.json();
+    const messageContent = data?.choices?.[0]?.message?.content || '';
+    const parsedPayload = extractJsonPayload(messageContent);
+
+    if (!parsedPayload || typeof parsedPayload !== 'object') {
+      return res.status(502).json({ error: 'AI returned invalid block format' });
+    }
+
+    const candidate = Object.prototype.hasOwnProperty.call(parsedPayload, 'content')
+      ? parsedPayload.content
+      : parsedPayload;
+
+    const refinedContent = normalizeRefinedContent(blockType, blockContent, candidate);
+
+    return res.json({ content: refinedContent });
+  } catch (err) {
+    console.error('AI Refine Block Error:', err);
+    return res.status(500).json({ error: 'Failed to refine block with AI' });
   }
 });
 

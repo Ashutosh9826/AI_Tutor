@@ -192,6 +192,10 @@ export const lessonService = {
   generateAi: async (promptData) => {
     const response = await api.post('/lessons/generate', promptData);
     return response.data;
+  },
+  refineBlockAi: async (lessonId, payload) => {
+    const response = await api.post(`/lessons/${lessonId}/refine-block`, payload);
+    return response.data;
   }
 };
 
