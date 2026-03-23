@@ -4,12 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { PrismaClient } = require('@prisma/client');
 require('dotenv').config();
-const {
-  addClassPresence,
-  removeClassPresence,
-  removeSocketPresence,
-  getOnlineStudentIdsForClass,
-} = require('./services/presenceStore');
+const { registerRealtimeHandlers } = require('./realtime/registerRealtimeHandlers');
 
 const app = express();
 const server = http.createServer(app);
@@ -19,7 +14,6 @@ const io = new Server(server, {
     methods: ['GET', 'POST']
   }
 });
-const activeQuizSessions = {}; // { blockId: { startTime: timestamp, timeLimit: seconds } }
 const prisma = new PrismaClient({ log: ['info', 'warn', 'error'] });
 const PORT = process.env.PORT || 5000;
 
@@ -57,133 +51,7 @@ app.get('/classes', async (req, res) => {
   }
 });
 
-io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
-
-  socket.on('join_lesson', async (lessonId) => {
-    socket.join(lessonId);
-    console.log(`User ${socket.id} joined lesson ${lessonId}`);
-    socket.to(lessonId).emit('user_joined', { id: socket.id }); // Keep original user_joined emit
-
-    // Send updated attendance
-    const sockets = await io.in(lessonId).fetchSockets();
-    io.to(lessonId).emit('attendance_updated', { count: sockets.length });
-  });
-
-  socket.on('send_message', (data) => {
-    // data: { lessonId, message, user }
-    io.to(data.lessonId).emit('receive_message', data);
-  });
-
-  // Quiz Synchronization
-  socket.on('start_quiz', (data) => {
-    // data: { lessonId, blockId, timeLimit: 30 }
-    activeQuizSessions[data.blockId] = { startTime: Date.now(), timeLimit: data.timeLimit || 30 };
-    io.to(data.lessonId).emit('quiz_started', data);
-  });
-
-  socket.on('stop_quiz', (data) => {
-    delete activeQuizSessions[data.blockId];
-    io.to(data.lessonId).emit('quiz_stopped', data);
-  });
-
-  socket.on('submit_answer', (data) => {
-    // data: { lessonId, blockId, optionIndex, userId, userName, pointsEarned }
-    const session = activeQuizSessions[data.blockId];
-    let score = 0;
-    
-    if (data.pointsEarned !== undefined) {
-      score = data.pointsEarned;
-    } else if (session) {
-      const timeElapsed = (Date.now() - session.startTime) / 1000;
-      const timeLeft = Math.max(0, session.timeLimit - timeElapsed);
-      // Base score 1000 if correct, plus speed bonus
-      score = 1000 + Math.round(timeLeft * 50); 
-    }
-
-    io.to(data.lessonId).emit('answer_received', { ...data, score });
-  });
-
-  socket.on('chat_lock', (data) => {
-    io.to(data.lessonId).emit('chat_locked', data);
-  });
-
-  socket.on('chat_unlock', (data) => {
-    io.to(data.lessonId).emit('chat_unlocked', data);
-  });
-
-  // Session-wide controls for competition and podium display
-  socket.on('start_final_quiz', (data) => {
-    io.to(data.lessonId).emit('start_final_quiz', data);
-  });
-
-  socket.on('show_leaderboard', (data) => {
-    io.to(data.lessonId).emit('show_leaderboard', data);
-  });
-
-  socket.on('join_class_presence', (data) => {
-    const classId = String(data?.classId || '').trim();
-    const userId = String(data?.userId || '').trim();
-    const role = String(data?.role || '').trim().toUpperCase();
-
-    if (!classId || !userId || !role) {
-      return;
-    }
-
-    addClassPresence({
-      classId,
-      userId,
-      role,
-      socketId: socket.id,
-    });
-
-    socket.join(`class_presence:${classId}`);
-    io.to(`class_presence:${classId}`).emit('class_presence_updated', {
-      classId,
-      onlineStudentIds: getOnlineStudentIdsForClass(classId),
-    });
-  });
-
-  socket.on('leave_class_presence', (data) => {
-    const classId = String(data?.classId || '').trim();
-    const userId = String(data?.userId || '').trim();
-    if (!classId || !userId) {
-      return;
-    }
-
-    removeClassPresence({
-      classId,
-      userId,
-      socketId: socket.id,
-    });
-
-    socket.leave(`class_presence:${classId}`);
-    io.to(`class_presence:${classId}`).emit('class_presence_updated', {
-      classId,
-      onlineStudentIds: getOnlineStudentIdsForClass(classId),
-    });
-  });
-
-  socket.on('disconnecting', () => {
-    socket.rooms.forEach(async (room) => {
-      if (room !== socket.id) {
-        const sockets = await io.in(room).fetchSockets();
-        io.to(room).emit('attendance_updated', { count: Math.max(0, sockets.length - 1) });
-      }
-    });
-  });
-
-  socket.on('disconnect', () => {
-    const affectedClassIds = removeSocketPresence(socket.id);
-    affectedClassIds.forEach((classId) => {
-      io.to(`class_presence:${classId}`).emit('class_presence_updated', {
-        classId,
-        onlineStudentIds: getOnlineStudentIdsForClass(classId),
-      });
-    });
-    console.log('User disconnected:', socket.id);
-  });
-});
+registerRealtimeHandlers(io);
 
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

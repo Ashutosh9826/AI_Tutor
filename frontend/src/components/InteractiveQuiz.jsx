@@ -31,8 +31,8 @@ export default function InteractiveQuiz({ block, userRole, isActive, onStart, on
     setSelectedOption(index);
   };
 
-  const handleSubmit = () => {
-    if (selectedOption !== null && !hasSubmitted && timeLeft > 0) {
+  const handleSubmit = (allowExpired = false) => {
+    if (selectedOption !== null && !hasSubmitted && (timeLeft > 0 || allowExpired)) {
       onSubmit(block.id, selectedOption);
       setHasSubmitted(true);
     }
@@ -40,7 +40,7 @@ export default function InteractiveQuiz({ block, userRole, isActive, onStart, on
 
   React.useEffect(() => {
     if (timeLeft === 0 && !hasSubmitted && isActive && userRole === 'STUDENT' && selectedOption !== null) {
-      handleSubmit();
+      handleSubmit(true);
     }
   }, [timeLeft, hasSubmitted, isActive, userRole, selectedOption]);
 

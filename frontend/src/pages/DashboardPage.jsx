@@ -229,13 +229,13 @@ export default function DashboardPage() {
               <p>Loading classes...</p>
             ) : classes.length > 0 ? (
               classes.map((cls) => (
-                <article key={cls.id} className="relative bg-surface-container-lowest rounded-xl overflow-hidden group hover:shadow-xl transition-all duration-300">
+                <article key={cls.id} data-testid={`class-card-${cls.id}`} className="relative bg-surface-container-lowest rounded-xl overflow-hidden group hover:shadow-xl transition-all duration-300">
                   <div className="h-32 bg-slate-800 relative p-6 flex flex-col justify-between">
                     <div className="absolute inset-0 opacity-40">
                       <img alt="Class header" className="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnZS7AKdtUOvj8_zwB4yiR1JEOA6BG8fgmolXIdyK2Qugb1P-99ewOJjGKQKHtZgPQ9d32wvEujL5f8jEARWGJIVO4lI0PjeDA2PKfRO4mfuE45P7MfHiKQ6ZunZelCv-OJFcHhnerPXqrC0EH0K7cOHl1tzA8sWOQ_ZpH-wHYq6BR_in0DK_qaAqNLgpvARR51jq_Lu_SINfcpyXJCLfuUAa1dlufu_WL8EgfF4XJn--5vpEb4DH_ZXu4u0Jv2ObLtgB2-cYAriA" />
                     </div>
                     <div className="relative z-10 flex justify-between items-start">
-                      <Link to={`/class/stream?classId=${cls.id}`}>
+                      <Link to={`/class/stream?classId=${cls.id}`} data-testid={`class-card-link-${cls.id}`}>
                         <h3 className="text-xl font-bold text-white hover:underline cursor-pointer">{cls.name}</h3>
                         <p className="text-white/80 text-sm">{cls.section || 'General'}</p>
                       </Link>
@@ -290,7 +290,7 @@ export default function DashboardPage() {
                   <div className="p-6 pt-10 flex flex-col gap-6">
                     <div className="space-y-4">
                       {user?.role === 'TEACHER' ? (
-                        <div className="text-sm text-slate-500">Class Code: <span className="font-mono font-bold text-primary">{cls.class_code}</span></div>
+                        <div className="text-sm text-slate-500">Class Code: <span data-testid={`class-code-${cls.id}`} className="font-mono font-bold text-primary">{cls.class_code}</span></div>
                       ) : (
                         <p className="text-slate-400 text-sm italic">No upcoming assignments</p>
                       )}
@@ -325,6 +325,7 @@ export default function DashboardPage() {
 
             {/* Add New Class Card */}
             <article
+              data-testid="dashboard-add-class-card"
               onClick={openActionModal}
               className="border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center p-12 group hover:border-primary hover:bg-blue-50/30 transition-all cursor-pointer"
             >
@@ -339,6 +340,7 @@ export default function DashboardPage() {
       
       {/* Floating Action Button (FAB) */}
       <button
+        data-testid="dashboard-add-class-fab"
         onClick={openActionModal}
         className="lg:hidden fixed bottom-6 right-6 w-14 h-14 atelier-card-gradient text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 transition-transform z-50"
       >
@@ -348,7 +350,7 @@ export default function DashboardPage() {
       {/* Create Class Modal (Teacher) */}
       {showCreateModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 animate-in" onClick={e => e.stopPropagation()}>
+          <div data-testid="create-class-modal" className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 animate-in" onClick={e => e.stopPropagation()}>
             <h2 className="text-2xl font-bold text-on-surface mb-2">Create a Class</h2>
             <p className="text-sm text-on-surface-variant mb-6">A unique class code will be generated automatically.</p>
             {modalError && <div className="text-error text-sm mb-4 bg-error-container/30 p-3 rounded-lg">{modalError}</div>}
@@ -356,6 +358,7 @@ export default function DashboardPage() {
               <div>
                 <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">Class Name *</label>
                 <input
+                  data-testid="create-class-name-input"
                   type="text"
                   value={className}
                   onChange={(e) => setClassName(e.target.value)}
@@ -367,6 +370,7 @@ export default function DashboardPage() {
               <div>
                 <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">Section (optional)</label>
                 <input
+                  data-testid="create-class-section-input"
                   type="text"
                   value={classSection}
                   onChange={(e) => setClassSection(e.target.value)}
@@ -376,7 +380,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 py-3 rounded-full border-2 border-outline/30 text-on-surface font-semibold hover:bg-surface-container-high transition-colors">Cancel</button>
-                <button type="submit" disabled={modalLoading} className="flex-1 py-3 rounded-full signature-gradient text-white font-semibold shadow-lg hover:shadow-xl transition-all active:scale-95 disabled:opacity-50">
+                <button data-testid="create-class-submit" type="submit" disabled={modalLoading} className="flex-1 py-3 rounded-full signature-gradient text-white font-semibold shadow-lg hover:shadow-xl transition-all active:scale-95 disabled:opacity-50">
                   {modalLoading ? 'Creating...' : 'Create'}
                 </button>
               </div>
@@ -388,7 +392,7 @@ export default function DashboardPage() {
       {/* Join Class Modal (Student) */}
       {showJoinModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowJoinModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 animate-in" onClick={e => e.stopPropagation()}>
+          <div data-testid="join-class-modal" className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 animate-in" onClick={e => e.stopPropagation()}>
             <h2 className="text-2xl font-bold text-on-surface mb-2">Join a Class</h2>
             <p className="text-sm text-on-surface-variant mb-6">Enter the class code provided by your teacher.</p>
             {modalError && <div className="text-error text-sm mb-4 bg-error-container/30 p-3 rounded-lg">{modalError}</div>}
@@ -396,6 +400,7 @@ export default function DashboardPage() {
               <div>
                 <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">Class Code *</label>
                 <input
+                  data-testid="join-class-code-input"
                   type="text"
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
@@ -406,7 +411,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowJoinModal(false)} className="flex-1 py-3 rounded-full border-2 border-outline/30 text-on-surface font-semibold hover:bg-surface-container-high transition-colors">Cancel</button>
-                <button type="submit" disabled={modalLoading} className="flex-1 py-3 rounded-full signature-gradient text-white font-semibold shadow-lg hover:shadow-xl transition-all active:scale-95 disabled:opacity-50">
+                <button data-testid="join-class-submit" type="submit" disabled={modalLoading} className="flex-1 py-3 rounded-full signature-gradient text-white font-semibold shadow-lg hover:shadow-xl transition-all active:scale-95 disabled:opacity-50">
                   {modalLoading ? 'Joining...' : 'Join'}
                 </button>
               </div>

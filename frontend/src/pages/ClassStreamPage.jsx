@@ -395,6 +395,7 @@ export default function ClassStreamPage() {
                   </h3>
                   {user?.role === 'TEACHER' && (
                     <button
+                      data-testid="new-assignment-button"
                       onClick={() => { setCreateError(''); setShowCreateAssignment(true); }}
                       disabled={isArchivedClass}
                       className="flex items-center gap-1 text-sm font-semibold text-primary hover:bg-primary/5 px-3 py-1.5 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -405,9 +406,22 @@ export default function ClassStreamPage() {
                   )}
                 </div>
                 {assignments.length > 0 ? assignments.map(assignment => (
-                  <Link key={assignment.id} to={`/assignment/${assignment.id}`} className="block">
-                    <article className="bg-surface-container-lowest rounded-xl shadow-sm border border-slate-100/10 p-6 hover:shadow-md transition-all cursor-pointer group">
-                      <div className="flex items-center gap-4">
+                  <article
+                    key={assignment.id}
+                    data-testid={`assignment-link-${assignment.id}`}
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => navigate(`/assignment/${assignment.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        navigate(`/assignment/${assignment.id}`);
+                      }
+                    }}
+                    className="block bg-surface-container-lowest rounded-xl shadow-sm border border-slate-100/10 p-6 hover:shadow-md transition-all cursor-pointer group focus:outline-none focus:ring-2 focus:ring-primary/60"
+                  >
+                    <div data-testid={`assignment-card-${assignment.id}`} className="flex items-center gap-4">
+                      
                         <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white">
                           <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>assignment</span>
                         </div>
@@ -438,9 +452,8 @@ export default function ClassStreamPage() {
                           </div>
                         )}
                         <span className="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors">chevron_right</span>
-                      </div>
-                    </article>
-                  </Link>
+                    </div>
+                  </article>
                 )) : (
                   <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-slate-100/10 p-8 text-center">
                     <span className="material-symbols-outlined text-4xl text-slate-300 mb-2 block">assignment</span>
@@ -459,6 +472,7 @@ export default function ClassStreamPage() {
                   {user?.role === 'TEACHER' && (
                     <div className="flex items-center gap-2">
                       <button
+                        data-testid="generate-ai-lesson-button"
                         onClick={() => { setAiError(''); setShowGenerateAi(true); }}
                         disabled={isArchivedClass}
                         className="flex items-center gap-1 text-sm font-semibold signature-gradient text-white shadow hover:shadow-lg px-3 py-1.5 rounded-full transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -467,6 +481,7 @@ export default function ClassStreamPage() {
                         Generate Lesson with AI
                       </button>
                       <button
+                        data-testid="manual-lesson-button"
                         onClick={() => { setLessonCreateError(''); setShowCreateLesson(true); }}
                         disabled={isArchivedClass}
                         className="flex items-center gap-1 text-sm font-semibold text-secondary hover:bg-secondary/5 px-3 py-1.5 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -478,15 +493,15 @@ export default function ClassStreamPage() {
                   )}
                 </div>
                 {lessons.length > 0 ? lessons.map(lesson => (
-                  <Link key={lesson.id} to={user?.role === 'TEACHER' ? `/lesson/edit?lessonId=${lesson.id}` : `/lesson/live?lessonId=${lesson.id}`} className="block">
-                    <article className="bg-surface-container-lowest rounded-xl shadow-sm border border-slate-100/10 p-6 hover:shadow-md transition-all cursor-pointer group">
+                  <Link key={lesson.id} data-testid={`lesson-link-${lesson.id}`} to={user?.role === 'TEACHER' ? `/lesson/edit?lessonId=${lesson.id}` : `/lesson/live?lessonId=${lesson.id}`} className="block">
+                    <article data-testid={`lesson-card-${lesson.id}`} className="bg-surface-container-lowest rounded-xl shadow-sm border border-slate-100/10 p-6 hover:shadow-md transition-all cursor-pointer group">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-white">
                           <span className="material-symbols-outlined">auto_stories</span>
                         </div>
                         <div className="flex-1">
                           <p className="text-sm font-bold text-slate-900 group-hover:text-secondary transition-colors">{lesson.title}</p>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-slate-500" data-testid={`lesson-status-${lesson.id}`}>
                             {lesson.status === 'LIVE' && <span className="text-tertiary font-bold">● LIVE</span>}
                             {lesson.status === 'DRAFT' && <span className="text-slate-400">Draft</span>}
                             {lesson.status === 'PUBLISHED' && <span className="text-secondary">Published</span>}
@@ -542,6 +557,7 @@ export default function ClassStreamPage() {
               <div>
                 <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">Title *</label>
                 <input
+                  data-testid="create-assignment-title-input"
                   type="text"
                   value={assignTitle}
                   onChange={(e) => setAssignTitle(e.target.value)}
@@ -553,6 +569,7 @@ export default function ClassStreamPage() {
               <div>
                 <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">Description</label>
                 <textarea
+                  data-testid="create-assignment-description-input"
                   value={assignDesc}
                   onChange={(e) => setAssignDesc(e.target.value)}
                   placeholder="Assignment instructions..."
@@ -571,7 +588,7 @@ export default function ClassStreamPage() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowCreateAssignment(false)} className="flex-1 py-3 rounded-full border-2 border-outline/30 text-on-surface font-semibold hover:bg-surface-container-high transition-colors">Cancel</button>
-                <button type="submit" disabled={createLoading} className="flex-1 py-3 rounded-full signature-gradient text-white font-semibold shadow-lg hover:shadow-xl transition-all active:scale-95 disabled:opacity-50">
+                <button data-testid="create-assignment-submit" type="submit" disabled={createLoading} className="flex-1 py-3 rounded-full signature-gradient text-white font-semibold shadow-lg hover:shadow-xl transition-all active:scale-95 disabled:opacity-50">
                   {createLoading ? 'Creating...' : 'Create'}
                 </button>
               </div>
@@ -591,6 +608,7 @@ export default function ClassStreamPage() {
               <div>
                 <label className="block text-xs font-semibold text-on-surface-variant mb-1 uppercase tracking-wider">Lesson Title *</label>
                 <input
+                  data-testid="create-lesson-title-input"
                   type="text"
                   value={lessonTitle}
                   onChange={(e) => setLessonTitle(e.target.value)}
@@ -601,7 +619,7 @@ export default function ClassStreamPage() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowCreateLesson(false)} className="flex-1 py-3 rounded-full border-2 border-outline/30 text-on-surface font-semibold hover:bg-surface-container-high transition-colors">Cancel</button>
-                <button type="submit" disabled={lessonCreateLoading} className="flex-1 py-3 rounded-full bg-secondary text-white font-semibold shadow-lg hover:shadow-xl transition-all active:scale-95 disabled:opacity-50">
+                <button data-testid="create-lesson-submit" type="submit" disabled={lessonCreateLoading} className="flex-1 py-3 rounded-full bg-secondary text-white font-semibold shadow-lg hover:shadow-xl transition-all active:scale-95 disabled:opacity-50">
                   {lessonCreateLoading ? 'Creating...' : 'Create'}
                 </button>
               </div>

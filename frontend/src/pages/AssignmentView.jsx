@@ -211,7 +211,7 @@ export default function AssignmentView() {
                   
                   <div className="space-y-4">
                     {(assignment.submissions?.length > 0 || submitted) ? (
-                      <div className="p-4 bg-secondary/5 rounded-xl border border-secondary/20">
+                      <div data-testid="assignment-submitted-state" className="p-4 bg-secondary/5 rounded-xl border border-secondary/20">
                         <p className="text-sm font-bold text-secondary mb-1">Success!</p>
                         <p className="text-xs text-on-surface-variant">Your work has been turned in.</p>
                         {assignment.submissions?.[0]?.grade !== null && (
@@ -229,12 +229,14 @@ export default function AssignmentView() {
                     ) : (
                       <>
                         <textarea 
+                          data-testid="assignment-submission-input"
                           className="w-full bg-surface-container-high border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary min-h-[120px] resize-none outline-none" 
                           placeholder="Paste your submission link or text here..."
                           value={submissionContent}
                           onChange={(e) => setSubmissionContent(e.target.value)}
                         ></textarea>
                         <button 
+                          data-testid="assignment-turnin-button"
                           onClick={handleTurnIn}
                           disabled={!submissionContent.trim() || submitting}
                           className="w-full py-3 px-4 rounded-full signature-gradient text-white font-bold shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2" 

@@ -594,6 +594,7 @@ export default function LessonEditor() {
             {saving ? 'Saving...' : 'All changes saved locally'}
           </div>
           <button 
+            data-testid="lesson-save-button"
             onClick={() => handleSave(lesson.status)} 
             disabled={saving}
             className="flex items-center gap-2 bg-surface text-primary border border-primary px-4 py-1.5 rounded-full font-semibold hover:bg-primary/5 transition-colors disabled:opacity-50"
@@ -602,6 +603,7 @@ export default function LessonEditor() {
             Save
           </button>
           <button 
+            data-testid="lesson-publish-button"
             onClick={() => handleSave('PUBLISHED')}
             disabled={saving || lesson.status === 'PUBLISHED'}
             className="bg-secondary text-white px-5 py-1.5 rounded-full font-semibold shadow-md active:scale-95 transition-all disabled:opacity-50"
@@ -632,6 +634,7 @@ export default function LessonEditor() {
             <div className="mb-12">
               <span className="text-label-md uppercase tracking-[0.2em] text-primary font-bold mb-4 block">Interactive Notebook • {lesson?.class?.name || 'Class'}</span>
               <input 
+                data-testid="lesson-title-input"
                 className="w-full text-[3rem] font-bold text-on-surface leading-tight tracking-tight mb-4 outline-none bg-transparent placeholder-outline-variant"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}

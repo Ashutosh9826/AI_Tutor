@@ -26,6 +26,13 @@ Read this first in every new AI session.
 - AI per-block refinement: teacher edits one block only; other blocks untouched.
 - Live lesson sockets: quiz sync, leaderboard, chat lock/unlock, live attendance count.
 
+## Recent Runtime Fixes (Kept)
+- Realtime socket wiring extracted to `backend/realtime/registerRealtimeHandlers.js` and used by `backend/index.js`.
+- Class stream assignment cards no longer render nested anchor tags (`<a>` inside `<a>`).
+  - Card navigation now uses a keyboard-accessible container.
+  - Teacher `Grade` link and `Delete` button remain independent controls.
+- `data-testid` hooks remain on key auth/class/lesson/assignment controls for stable automation hooks.
+
 ## Block UX Rules
 - `INTERACTIVE_SIMULATION`:
   - Clean consistent layout.
@@ -57,9 +64,8 @@ Read this first in every new AI session.
 - Preserve teacher/student permission boundaries.
 
 ## Current Gaps / Next
-- Add tests for notebook/simulation behavior.
 - Add attendance analytics/export.
-- Add E2E smoke for AI-generated lessons and attendance flow.
+- Add E2E smoke for AI-generated lessons and attendance flow (if test suite is reintroduced).
 - Resolve local Vite/Tailwind oxide build environment issue if it reappears.
 
 ## Context Size Rules
@@ -75,4 +81,9 @@ Read this first in every new AI session.
 - Rewrote context into minimal resumable format.
 - Preserved required blocks: goal, stack, roles, features, attendance, constraints.
 - Kept rules optimized for low token transfer.
+
+### 2026-03-24 - Test Artifact Cleanup
+- Removed generated test artifacts and test suites by request.
+- Removed test-only config/scripts/dependencies from backend and frontend manifests.
+- Retained runtime fixes (realtime handler extraction and assignment-card nested-link fix).
 <!-- SESSION_LOG_END -->

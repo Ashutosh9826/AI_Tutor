@@ -77,10 +77,10 @@ export default function LoginPage() {
           
           {/* Role Selection Toggle */}
           <div className="flex p-1 bg-surface-container rounded-full mb-8">
-            <button type="button" onClick={() => setRole('STUDENT')} className={`flex-1 py-2 text-sm font-semibold rounded-full transition-all ${role === 'STUDENT' ? 'bg-surface-container-lowest text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}>
+            <button data-testid="role-student-toggle" type="button" onClick={() => setRole('STUDENT')} className={`flex-1 py-2 text-sm font-semibold rounded-full transition-all ${role === 'STUDENT' ? 'bg-surface-container-lowest text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}>
               Student
             </button>
-            <button type="button" onClick={() => setRole('TEACHER')} className={`flex-1 py-2 text-sm font-semibold rounded-full transition-all ${role === 'TEACHER' ? 'bg-surface-container-lowest text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}>
+            <button data-testid="role-teacher-toggle" type="button" onClick={() => setRole('TEACHER')} className={`flex-1 py-2 text-sm font-semibold rounded-full transition-all ${role === 'TEACHER' ? 'bg-surface-container-lowest text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}>
               Teacher
             </button>
           </div>
@@ -90,7 +90,7 @@ export default function LoginPage() {
             </p>
           )}
           
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6" onSubmit={handleSubmit} data-testid="auth-form">
             {/* Google Sign In (Real OAuth) */}
             <div className="flex justify-center">
               <GoogleLogin
@@ -116,7 +116,7 @@ export default function LoginPage() {
               <div className="space-y-1">
                 <label className="block text-xs font-semibold text-on-surface-variant ml-1 label-md">FULL NAME</label>
                 <div className="relative group">
-                  <input value={name} onChange={e => setName(e.target.value)} required className="w-full bg-surface-container-high border-b-2 border-outline/50 focus:border-primary focus:ring-0 px-1 py-3 transition-colors outline-none text-on-surface placeholder:text-on-surface-variant/50" placeholder="John Doe" type="text" />
+                  <input data-testid="auth-name-input" value={name} onChange={e => setName(e.target.value)} required className="w-full bg-surface-container-high border-b-2 border-outline/50 focus:border-primary focus:ring-0 px-1 py-3 transition-colors outline-none text-on-surface placeholder:text-on-surface-variant/50" placeholder="John Doe" type="text" />
                 </div>
               </div>
             )}
@@ -125,7 +125,7 @@ export default function LoginPage() {
             <div className="space-y-1">
               <label className="block text-xs font-semibold text-on-surface-variant ml-1 label-md">EMAIL ADDRESS</label>
               <div className="relative group">
-                <input value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-surface-container-high border-b-2 border-outline/50 focus:border-primary focus:ring-0 px-1 py-3 transition-colors outline-none text-on-surface placeholder:text-on-surface-variant/50" placeholder="name@school.edu" type="email" />
+                <input data-testid="auth-email-input" value={email} onChange={e => setEmail(e.target.value)} required className="w-full bg-surface-container-high border-b-2 border-outline/50 focus:border-primary focus:ring-0 px-1 py-3 transition-colors outline-none text-on-surface placeholder:text-on-surface-variant/50" placeholder="name@school.edu" type="email" />
               </div>
             </div>
             
@@ -136,19 +136,19 @@ export default function LoginPage() {
                 {!isRegistering && <Link className="text-xs font-semibold text-primary hover:underline" to="/forgot-password">Forgot?</Link>}
               </div>
               <div className="relative group">
-                <input value={password} onChange={e => setPassword(e.target.value)} required className="w-full bg-surface-container-high border-b-2 border-outline/50 focus:border-primary focus:ring-0 px-1 py-3 transition-colors outline-none text-on-surface placeholder:text-on-surface-variant/50" placeholder="••••••••" type="password" />
+                <input data-testid="auth-password-input" value={password} onChange={e => setPassword(e.target.value)} required className="w-full bg-surface-container-high border-b-2 border-outline/50 focus:border-primary focus:ring-0 px-1 py-3 transition-colors outline-none text-on-surface placeholder:text-on-surface-variant/50" placeholder="••••••••" type="password" />
               </div>
             </div>
             
             {/* Sign In Button */}
-            <button type="submit" className="w-full signature-gradient text-white font-semibold py-4 rounded-full shadow-lg shadow-primary/20 hover:shadow-primary/40 active:scale-95 transition-all duration-200 mt-4 block text-center">
+            <button data-testid="auth-submit-button" type="submit" className="w-full signature-gradient text-white font-semibold py-4 rounded-full shadow-lg shadow-primary/20 hover:shadow-primary/40 active:scale-95 transition-all duration-200 mt-4 block text-center">
               {isRegistering ? 'Create Account' : 'Sign in to Atelier'}
             </button>
           </form>
           
           <div className="mt-8 text-center">
             <p className="text-sm text-on-surface-variant">
-              {isRegistering ? "Already have an account?" : "Don't have an account?"} <button type="button" onClick={() => setIsRegistering(!isRegistering)} className="text-primary font-semibold hover:underline decoration-2 underline-offset-4">{isRegistering ? 'Sign in' : 'Create account'}</button>
+              {isRegistering ? "Already have an account?" : "Don't have an account?"} <button data-testid="auth-switch-mode-button" type="button" onClick={() => setIsRegistering(!isRegistering)} className="text-primary font-semibold hover:underline decoration-2 underline-offset-4">{isRegistering ? 'Sign in' : 'Create account'}</button>
             </p>
           </div>
         </div>
