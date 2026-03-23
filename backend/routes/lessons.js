@@ -21,23 +21,108 @@ const ALLOWED_BLOCK_TYPES = new Set([
   'INTERACTIVE_SIMULATION',
 ]);
 
-const extractJsonPayload = (rawText) => {
-  let cleaned = String(rawText || '').trim();
-  if (!cleaned) return null;
-
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/, '')
-      .replace(/```$/, '')
-      .trim();
-  }
-
+const tryParseJson = (value) => {
   try {
-    return JSON.parse(cleaned);
+    return JSON.parse(value);
   } catch {
     return null;
   }
+};
+
+const extractBalancedJsonCandidate = (text, startIndex) => {
+  const startChar = text[startIndex];
+  if (startChar !== '{' && startChar !== '[') {
+    return null;
+  }
+
+  const closeToOpen = { '}': '{', ']': '[' };
+  const stack = [];
+  let inString = false;
+  let escaped = false;
+
+  for (let i = startIndex; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+
+      if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === '{' || ch === '[') {
+      stack.push(ch);
+      continue;
+    }
+
+    if (ch === '}' || ch === ']') {
+      const expectedOpen = closeToOpen[ch];
+      const lastOpen = stack[stack.length - 1];
+      if (lastOpen !== expectedOpen) {
+        return null;
+      }
+      stack.pop();
+      if (stack.length === 0) {
+        return text.slice(startIndex, i + 1);
+      }
+    }
+  }
+
+  return null;
+};
+
+const parseJsonFromText = (rawText) => {
+  const cleaned = String(rawText || '').replace(/^\uFEFF/, '').trim();
+  if (!cleaned) return null;
+
+  const direct = tryParseJson(cleaned);
+  if (direct !== null) {
+    return direct;
+  }
+
+  const fencedRegex = /```(?:json)?\s*([\s\S]*?)```/gi;
+  let fencedMatch = fencedRegex.exec(cleaned);
+  while (fencedMatch) {
+    const candidate = parseJsonFromText(fencedMatch[1]);
+    if (candidate !== null) {
+      return candidate;
+    }
+    fencedMatch = fencedRegex.exec(cleaned);
+  }
+
+  for (let i = 0; i < cleaned.length; i += 1) {
+    const ch = cleaned[i];
+    if (ch !== '{' && ch !== '[') continue;
+
+    const candidate = extractBalancedJsonCandidate(cleaned, i);
+    if (!candidate) continue;
+
+    const parsed = tryParseJson(candidate);
+    if (parsed !== null) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
+const extractJsonPayload = (rawText) => {
+  return parseJsonFromText(rawText);
 };
 
 const parsePossiblyJson = (value) => {
@@ -571,49 +656,68 @@ const normalizeFinalLessonData = (raw, structurePlan, strategyPlan, topic) => {
 
 const callOpenRouterForJson = async ({ systemPrompt, userPrompt }) => {
   const apiKey = getOpenRouterApiKey();
-  const openRouterRes = await fetch(OPENROUTER_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'http://localhost:5173',
-      'X-Title': 'Academic Atelier',
-    },
-    body: JSON.stringify({
-      model: OPENROUTER_MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-    }),
-  });
+  const requestOnce = async (prompt) => {
+    const openRouterRes = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'http://localhost:5173',
+        'X-Title': 'Academic Atelier',
+      },
+      body: JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt },
+        ],
+      }),
+    });
 
-  if (!openRouterRes.ok) {
-    let providerErrorText = await openRouterRes.text();
-    try {
-      const parsedError = JSON.parse(providerErrorText);
-      providerErrorText =
-        parsedError?.error?.message ||
-        parsedError?.message ||
-        providerErrorText;
-    } catch {
-      // Keep raw text if provider response is not JSON.
+    if (!openRouterRes.ok) {
+      let providerErrorText = await openRouterRes.text();
+      try {
+        const parsedError = JSON.parse(providerErrorText);
+        providerErrorText =
+          parsedError?.error?.message ||
+          parsedError?.message ||
+          providerErrorText;
+      } catch {
+        // Keep raw text if provider response is not JSON.
+      }
+
+      const error = new Error(
+        `OpenRouter API Error (${openRouterRes.status}): ${providerErrorText}`,
+      );
+      error.status = openRouterRes.status;
+      throw error;
     }
 
-    const error = new Error(
-      `OpenRouter API Error (${openRouterRes.status}): ${providerErrorText}`,
-    );
-    error.status = openRouterRes.status;
-    throw error;
+    const data = await openRouterRes.json();
+    return data?.choices?.[0]?.message?.content || '';
+  };
+
+  let messageContent = await requestOnce(userPrompt);
+  let parsed = extractJsonPayload(messageContent);
+  if (parsed && typeof parsed === 'object') {
+    return parsed;
   }
 
-  const data = await openRouterRes.json();
-  const messageContent = data?.choices?.[0]?.message?.content || '';
-  const parsed = extractJsonPayload(messageContent);
-  if (!parsed || typeof parsed !== 'object') {
-    throw new Error('OpenRouter returned invalid JSON payload');
+  const retryPrompt = `${userPrompt}
+
+IMPORTANT: Return ONLY valid JSON that exactly matches the required schema.
+Do not include markdown fences.
+Do not include explanatory text before or after the JSON.`;
+  const retryMessageContent = await requestOnce(retryPrompt);
+  parsed = extractJsonPayload(retryMessageContent);
+  if (parsed && typeof parsed === 'object') {
+    return parsed;
   }
-  return parsed;
+
+  const firstPreview = String(messageContent || '').slice(0, 240);
+  const retryPreview = String(retryMessageContent || '').slice(0, 240);
+  console.warn('OpenRouter JSON parse failed after retry', { firstPreview, retryPreview });
+  throw new Error('OpenRouter returned invalid JSON payload');
 };
 
 // Get lessons for a class
