@@ -131,6 +131,17 @@ const normalizeRefinedContent = (blockType, originalContent, candidate) => {
 
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_PLACEHOLDER_VALUES = new Set([
+  '',
+  'replace_me',
+  'your_openrouter_api_key',
+  'your_openrouter_key',
+  'changeme',
+]);
+
+const getOpenRouterApiKey = () => String(process.env.OPENROUTER_API_KEY || '').trim();
+const hasUsableOpenRouterApiKey = () =>
+  !OPENROUTER_PLACEHOLDER_VALUES.has(getOpenRouterApiKey().toLowerCase());
 
 const getDefaultQuizContent = () => ({
   question: 'What is the most important idea from this lesson section?',
@@ -559,10 +570,11 @@ const normalizeFinalLessonData = (raw, structurePlan, strategyPlan, topic) => {
 };
 
 const callOpenRouterForJson = async ({ systemPrompt, userPrompt }) => {
+  const apiKey = getOpenRouterApiKey();
   const openRouterRes = await fetch(OPENROUTER_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': 'http://localhost:5173',
       'X-Title': 'Academic Atelier',
@@ -577,8 +589,22 @@ const callOpenRouterForJson = async ({ systemPrompt, userPrompt }) => {
   });
 
   if (!openRouterRes.ok) {
-    const errorText = await openRouterRes.text();
-    throw new Error(`OpenRouter API Error: ${errorText}`);
+    let providerErrorText = await openRouterRes.text();
+    try {
+      const parsedError = JSON.parse(providerErrorText);
+      providerErrorText =
+        parsedError?.error?.message ||
+        parsedError?.message ||
+        providerErrorText;
+    } catch {
+      // Keep raw text if provider response is not JSON.
+    }
+
+    const error = new Error(
+      `OpenRouter API Error (${openRouterRes.status}): ${providerErrorText}`,
+    );
+    error.status = openRouterRes.status;
+    throw error;
   }
 
   const data = await openRouterRes.json();
@@ -634,8 +660,11 @@ router.post('/generate', authenticateToken, requireTeacher, async (req, res) => 
   try {
     const { topic, gradeLevel, targetDuration, referenceContent } = req.body;
 
-    if (!process.env.OPENROUTER_API_KEY) {
-      return res.status(500).json({ error: 'OpenRouter API key is missing from environment variables' });
+    if (!hasUsableOpenRouterApiKey()) {
+      return res.status(500).json({
+        error:
+          'AI service is not configured. Set a valid OPENROUTER_API_KEY in backend/.env and restart the backend.',
+      });
     }
 
     const safeTopic = String(topic || '').trim() || 'Untitled Topic';
@@ -783,7 +812,25 @@ ${reference ? `\nReference content:\n${reference}` : ''}`;
     res.json(lessonData);
   } catch (err) {
     console.error('AI Generation Error:', err);
-    res.status(500).json({ error: 'Failed to generate lesson with AI' });
+
+    if (err?.status === 401 || err?.status === 403) {
+      return res.status(502).json({
+        error:
+          'AI provider rejected credentials. Update OPENROUTER_API_KEY in backend/.env and restart the backend.',
+      });
+    }
+
+    if (String(err?.message || '').includes('invalid JSON payload')) {
+      return res.status(502).json({
+        error:
+          'AI provider returned malformed JSON. Please try generating again.',
+      });
+    }
+
+    return res.status(500).json({
+      error:
+        'Failed to generate lesson with AI. Check backend logs for details.',
+    });
   }
 });
 
@@ -798,8 +845,11 @@ router.post('/:id/refine-block', authenticateToken, requireTeacher, async (req, 
       return res.status(400).json({ error: 'Unsupported block type for AI refinement' });
     }
 
-    if (!process.env.OPENROUTER_API_KEY) {
-      return res.status(500).json({ error: 'OpenRouter API key is missing from environment variables' });
+    if (!hasUsableOpenRouterApiKey()) {
+      return res.status(500).json({
+        error:
+          'AI service is not configured. Set a valid OPENROUTER_API_KEY in backend/.env and restart the backend.',
+      });
     }
 
     const lesson = await prisma.lesson.findUnique({
@@ -855,7 +905,7 @@ ${currentContent}`;
     const openRouterRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${getOpenRouterApiKey()}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'http://localhost:5173',
         'X-Title': 'Academic Atelier',
@@ -870,8 +920,22 @@ ${currentContent}`;
     });
 
     if (!openRouterRes.ok) {
-      const errorText = await openRouterRes.text();
-      throw new Error(`OpenRouter API Error: ${errorText}`);
+      let providerErrorText = await openRouterRes.text();
+      try {
+        const parsedError = JSON.parse(providerErrorText);
+        providerErrorText =
+          parsedError?.error?.message ||
+          parsedError?.message ||
+          providerErrorText;
+      } catch {
+        // Keep raw text if provider response is not JSON.
+      }
+
+      const error = new Error(
+        `OpenRouter API Error (${openRouterRes.status}): ${providerErrorText}`,
+      );
+      error.status = openRouterRes.status;
+      throw error;
     }
 
     const data = await openRouterRes.json();
@@ -891,7 +955,18 @@ ${currentContent}`;
     return res.json({ content: refinedContent });
   } catch (err) {
     console.error('AI Refine Block Error:', err);
-    return res.status(500).json({ error: 'Failed to refine block with AI' });
+
+    if (err?.status === 401 || err?.status === 403) {
+      return res.status(502).json({
+        error:
+          'AI provider rejected credentials. Update OPENROUTER_API_KEY in backend/.env and restart the backend.',
+      });
+    }
+
+    return res.status(500).json({
+      error:
+        'Failed to refine block with AI. Check backend logs for details.',
+    });
   }
 });
 

@@ -34,6 +34,8 @@ Read this first in every new AI session.
 - `data-testid` hooks remain on key auth/class/lesson/assignment controls for stable automation hooks.
 - Frontend Vite scripts now use `--configLoader native` to avoid the Windows Tailwind oxide / Rolldown `EPERM` config-loading failure.
 - Frontend routes are lazy-loaded in `frontend/src/App.jsx` to keep the main bundle smaller and avoid the previous chunk-size warning.
+- Frontend API base URL now derives from the browser host when `VITE_API_URL` is not set (reduces localhost/127.0.0.1 mismatch issues).
+- Assignment submit flow now surfaces backend error details in UI and backend validates enrollment/assignment existence before insert.
 
 ## Block UX Rules
 - `INTERACTIVE_SIMULATION`:
@@ -91,4 +93,8 @@ Read this first in every new AI session.
 ### 2026-03-24 - Windows Build Fix
 - Resolved the local Tailwind oxide / Vite config loader `EPERM` issue by switching frontend Vite scripts to `--configLoader native`.
 - Added route-level lazy loading so the frontend production bundle no longer emits the previous oversized-chunk warning.
+
+### 2026-03-24 - API Reliability Fixes
+- Updated backend AI endpoints to return actionable provider/auth errors instead of generic failures.
+- Added clearer network-unreachable messaging for AI lesson generation and assignment submission in frontend UI.
 <!-- SESSION_LOG_END -->

@@ -122,21 +122,51 @@ router.post('/:id/submit', authenticateToken, async (req, res) => {
     const { file_url } = req.body;
     const { userId, role } = req.user;
 
+    if (!userId) {
+      return res.status(401).json({ error: 'Invalid session. Please sign in again.' });
+    }
+
     if (role === 'TEACHER') {
       return res.status(403).json({ error: 'Teachers cannot submit assignments' });
+    }
+
+    if (typeof file_url !== 'string' || !file_url.trim()) {
+      return res.status(400).json({ error: 'Submission content is required' });
+    }
+
+    const assignment = await prisma.assignment.findUnique({
+      where: { id },
+      include: {
+        class: true,
+      },
+    });
+
+    if (!assignment) {
+      return res.status(404).json({ error: 'Assignment not found' });
+    }
+
+    const enrollment = await prisma.enrollment.findFirst({
+      where: {
+        class_id: assignment.class_id,
+        user_id: userId,
+      },
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({ error: 'You are not enrolled in this class' });
     }
 
     const submission = await prisma.submission.create({
       data: {
         assignment_id: id,
         student_id: userId,
-        file_url
+        file_url: file_url.trim(),
       }
     });
 
     res.status(201).json(submission);
   } catch (err) {
-    console.error(err);
+    console.error('Submit assignment error:', err);
     res.status(500).json({ error: 'Failed to submit assignment' });
   }
 });

@@ -14,6 +14,7 @@ export default function AssignmentView() {
   const [submissionContent, setSubmissionContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const isTeacher = user?.role === 'TEACHER';
 
   useEffect(() => {
@@ -42,13 +43,18 @@ export default function AssignmentView() {
     if (isTeacher) return;
     if (!submissionContent.trim()) return;
     try {
+      setSubmitError('');
       setSubmitting(true);
       await assignmentService.submit(id, submissionContent);
       setSubmitted(true);
       await fetchAssignment(); // Refresh to show submission status
     } catch (err) {
       console.error('Failed to submit:', err);
-      alert('Failed to submit assignment');
+      if (!err.response) {
+        setSubmitError('Cannot reach backend API. Ensure backend is running on port 5000 and try again.');
+      } else {
+        setSubmitError(err.response?.data?.error || err.message || 'Failed to submit assignment');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -228,6 +234,11 @@ export default function AssignmentView() {
                       </div>
                     ) : (
                       <>
+                        {submitError && (
+                          <div className="p-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
+                            {submitError}
+                          </div>
+                        )}
                         <textarea 
                           data-testid="assignment-submission-input"
                           className="w-full bg-surface-container-high border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary min-h-[120px] resize-none outline-none" 

@@ -224,7 +224,11 @@ export default function ClassStreamPage() {
       // Navigate to the editor so the teacher can review the AI generated content
       navigate(`/lesson/edit?lessonId=${newLesson.id}`);
     } catch (err) {
-      setAiError(err.response?.data?.error || err.message || 'Failed to generate AI lesson');
+      if (!err.response) {
+        setAiError('Cannot reach backend API. Ensure backend is running on port 5000 and try again.');
+      } else {
+        setAiError(err.response?.data?.error || err.message || 'Failed to generate AI lesson');
+      }
     } finally {
       setAiLoading(false);
     }
