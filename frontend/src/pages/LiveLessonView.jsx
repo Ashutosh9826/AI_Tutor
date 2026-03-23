@@ -6,6 +6,7 @@ import { chatService, lessonService } from '../services/api';
 import ChatAssistant from '../components/ChatAssistant';
 import InteractiveQuiz from '../components/InteractiveQuiz';
 import WrittenQuiz from '../components/WrittenQuiz';
+import InteractiveSimulationBlock from '../components/InteractiveSimulationBlock';
 import TeacherControlPanel from '../components/TeacherControlPanel'; // 1. Import TeacherControlPanel
 
 const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
@@ -57,10 +58,22 @@ export default function LiveLessonView() {
       try {
         const data = await lessonService.getById(lessonId);
         if (data.blocks) {
-          data.blocks = data.blocks.map(b => ({
-             ...b, 
-             content: (b.type === 'QUIZ' && typeof b.content === 'string') ? JSON.parse(b.content) : b.content 
-          }));
+          data.blocks = data.blocks.map((b) => {
+            if (
+              (b.type === 'QUIZ' ||
+                b.type === 'EXERCISE' ||
+                b.type === 'WRITTEN_QUIZ' ||
+                b.type === 'INTERACTIVE_SIMULATION') &&
+              typeof b.content === 'string'
+            ) {
+              try {
+                return { ...b, content: JSON.parse(b.content) };
+              } catch (error) {
+                console.error('Failed to parse block content', b.type, error);
+              }
+            }
+            return b;
+          });
         }
         setLesson(data);
       } catch (err) {
@@ -463,6 +476,14 @@ export default function LiveLessonView() {
                       key={block.id}
                       block={block}
                       userRole={user?.role}
+                    />
+                  );
+                }
+                if (block.type === 'INTERACTIVE_SIMULATION') {
+                  return (
+                    <InteractiveSimulationBlock
+                      key={block.id}
+                      block={block}
                     />
                   );
                 }

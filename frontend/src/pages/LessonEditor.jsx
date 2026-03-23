@@ -2,9 +2,136 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { lessonService } from '../services/api';
 import useAuthStore from '../store/useAuthStore';
+import InteractiveSimulationBlock from '../components/InteractiveSimulationBlock';
 
 // Simple ID generator for local new blocks
 const generateId = () => Math.random().toString(36).substr(2, 9);
+
+const SIMULATION_TYPES = [
+  'FLOWCHART',
+  'GRAPH',
+  'TREE',
+  'STATE_MACHINE',
+  'STEP_PROCESS',
+  'ALGORITHM',
+  'TIMELINE',
+  'DECISION_DIAGRAM',
+  'DP_TABLE',
+  'RECURSION_TREE',
+  'SYSTEM_ARCHITECTURE',
+];
+
+const defaultSimulationContent = () => ({
+  title: 'Binary Search Simulation',
+  diagramType: 'ALGORITHM',
+  description: 'Trace each iteration of binary search and observe how low/high/mid change.',
+  hint: 'Compare target with middle value, then discard one half.',
+  nodes: [
+    { id: 'low', label: 'Low Pointer' },
+    { id: 'mid', label: 'Mid Pointer' },
+    { id: 'high', label: 'High Pointer' },
+    { id: 'target', label: 'Target' },
+  ],
+  edges: [
+    { from: 'low', to: 'mid', label: 'range start' },
+    { from: 'mid', to: 'high', label: 'range end' },
+  ],
+  table: [[1, 3, 4, 8, 12, 15, 19]],
+  steps: [
+    {
+      title: 'Initialize',
+      explanation: 'Set low=0, high=n-1, and compute middle index.',
+      activeNodes: ['low', 'mid', 'high'],
+      activeEdges: ['low->mid', 'mid->high'],
+      stateValues: { low: 0, high: 6, mid: 3, midValue: 8 },
+      highlightCells: [{ row: 0, col: 3 }],
+    },
+    {
+      title: 'Move Right',
+      explanation: 'Target is larger than mid value, move low to mid + 1.',
+      activeNodes: ['low', 'mid', 'high', 'target'],
+      activeEdges: ['low->mid', 'mid->high'],
+      stateValues: { low: 4, high: 6, mid: 5, midValue: 15, target: 15 },
+      highlightCells: [{ row: 0, col: 5 }],
+    },
+    {
+      title: 'Found Target',
+      explanation: 'Middle value equals target. Search completes.',
+      activeNodes: ['mid', 'target'],
+      activeEdges: [],
+      stateValues: { answerIndex: 5, value: 15 },
+      highlightCells: [{ row: 0, col: 5 }],
+      timelineIndex: 2,
+    },
+  ],
+  solutionText: 'Binary search finishes in O(log n) by halving the search interval each step.',
+});
+
+const nodesToText = (nodes = []) =>
+  nodes.map((node) => `${node.id || ''}|${node.label || ''}`).join('\n');
+
+const edgesToText = (edges = []) =>
+  edges.map((edge) => `${edge.from || ''}->${edge.to || ''}|${edge.label || ''}`).join('\n');
+
+const parseNodesText = (text = '') =>
+  text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [id = '', label = ''] = line.split('|');
+      return { id: id.trim(), label: label.trim() || id.trim() };
+    })
+    .filter((node) => node.id);
+
+const parseEdgesText = (text = '') =>
+  text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [path = '', label = ''] = line.split('|');
+      const [from = '', to = ''] = path.split('->');
+      return { from: from.trim(), to: to.trim(), label: label.trim() };
+    })
+    .filter((edge) => edge.from && edge.to);
+
+const stateValuesToText = (values = {}) =>
+  Object.entries(values)
+    .map(([key, value]) => `${key}=${typeof value === 'object' ? JSON.stringify(value) : value}`)
+    .join('\n');
+
+const parseStateValuesText = (text = '') => {
+  const result = {};
+  text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const [rawKey, ...rawValue] = line.split('=');
+      const key = (rawKey || '').trim();
+      if (!key) return;
+      const valueText = rawValue.join('=').trim();
+      if (valueText === '') {
+        result[key] = '';
+        return;
+      }
+      if (!Number.isNaN(Number(valueText)) && valueText !== '') {
+        result[key] = Number(valueText);
+        return;
+      }
+      if (valueText === 'true' || valueText === 'false') {
+        result[key] = valueText === 'true';
+        return;
+      }
+      try {
+        result[key] = JSON.parse(valueText);
+      } catch {
+        result[key] = valueText;
+      }
+    });
+  return result;
+};
 
 export default function LessonEditor() {
   const location = useLocation();
@@ -66,7 +193,13 @@ export default function LessonEditor() {
       if (data.blocks && data.blocks.length > 0) {
         setBlocks(data.blocks.map(b => {
           let parsedContent = b.content;
-          if ((b.type === 'QUIZ' || b.type === 'EXERCISE') && typeof b.content === 'string') {
+          if (
+            (b.type === 'QUIZ' ||
+              b.type === 'EXERCISE' ||
+              b.type === 'WRITTEN_QUIZ' ||
+              b.type === 'INTERACTIVE_SIMULATION') &&
+            typeof b.content === 'string'
+          ) {
             try { parsedContent = JSON.parse(b.content); } catch (e) { console.error(e); }
           }
           return { ...b, localId: b.id, content: parsedContent };
@@ -89,7 +222,14 @@ export default function LessonEditor() {
     try {
       const sanitizedBlocks = blocks.map((b) => ({
         type: b.type,
-        content: (b.type === 'QUIZ' || b.type === 'EXERCISE' || b.type === 'WRITTEN_QUIZ') && typeof b.content !== 'string' ? b.content : b.content,
+        content:
+          (b.type === 'QUIZ' ||
+            b.type === 'EXERCISE' ||
+            b.type === 'WRITTEN_QUIZ' ||
+            b.type === 'INTERACTIVE_SIMULATION') &&
+          typeof b.content !== 'string'
+            ? b.content
+            : b.content,
       }));
       
       const updatedLesson = await lessonService.update(lessonId, {
@@ -117,7 +257,8 @@ export default function LessonEditor() {
       localId: generateId(), 
       type, 
       content: (type === 'QUIZ' || type === 'EXERCISE') ? { question: '', options: [{text: '', isCorrect: true, feedback: ''}, {text: '', isCorrect: false, feedback: ''}], timeLimit: 30 } : 
-               (type === 'WRITTEN_QUIZ') ? { question: '', idealAnswer: '' } : '' 
+               (type === 'WRITTEN_QUIZ') ? { question: '', idealAnswer: '' } :
+               (type === 'INTERACTIVE_SIMULATION') ? defaultSimulationContent() : '' 
     };
     setBlocks([...blocks, newBlock]);
     setShowAiMenu(false);
@@ -333,6 +474,198 @@ export default function LessonEditor() {
         </section>
       );
     }
+
+    if (block.type === 'INTERACTIVE_SIMULATION') {
+      const simData = typeof block.content === 'object' ? block.content : defaultSimulationContent();
+      const steps = simData.steps || [];
+      const updateSimulation = (changes) => updateBlock(block.localId, { ...simData, ...changes });
+      const updateSimulationStep = (stepIndex, changes) => {
+        const nextSteps = [...steps];
+        nextSteps[stepIndex] = { ...nextSteps[stepIndex], ...changes };
+        updateSimulation({ steps: nextSteps });
+      };
+
+      return (
+        <section key={block.localId} className="group relative bg-surface-container-lowest rounded-xl p-8 transition-all hover:shadow-lg notebook-line border-l-2 border-transparent hover:border-l-primary mb-8">
+          <BlockControls index={index} localId={block.localId} />
+          <div className="flex items-center gap-2 mb-6 text-xs font-bold tracking-widest uppercase text-primary">
+            <span className="material-symbols-outlined text-sm">experiment</span> Interactive Simulation
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Title</label>
+              <input
+                type="text"
+                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
+                value={simData.title || ''}
+                onChange={(e) => updateSimulation({ title: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Diagram Type</label>
+              <select
+                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
+                value={simData.diagramType || 'FLOWCHART'}
+                onChange={(e) => updateSimulation({ diagramType: e.target.value })}
+              >
+                {SIMULATION_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-4 mb-6">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Description</label>
+              <textarea
+                rows={2}
+                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary resize-y"
+                value={simData.description || ''}
+                onChange={(e) => updateSimulation({ description: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Hint</label>
+              <input
+                type="text"
+                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
+                value={simData.hint || ''}
+                onChange={(e) => updateSimulation({ hint: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Solution Text</label>
+              <textarea
+                rows={2}
+                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary resize-y"
+                value={simData.solutionText || ''}
+                onChange={(e) => updateSimulation({ solutionText: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Nodes (id|label per line)</label>
+              <textarea
+                rows={5}
+                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
+                value={nodesToText(simData.nodes)}
+                onChange={(e) => updateSimulation({ nodes: parseNodesText(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-outline mb-2">Edges (from-&gt;to|label per line)</label>
+              <textarea
+                rows={5}
+                className="w-full bg-surface-container-low border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
+                value={edgesToText(simData.edges)}
+                onChange={(e) => updateSimulation({ edges: parseEdgesText(e.target.value) })}
+              />
+            </div>
+          </div>
+
+          <div className="mb-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-outline">Steps</p>
+              <button
+                type="button"
+                onClick={() =>
+                  updateSimulation({
+                    steps: [
+                      ...steps,
+                      {
+                        title: `Step ${steps.length + 1}`,
+                        explanation: '',
+                        activeNodes: [],
+                        activeEdges: [],
+                        stateValues: {},
+                      },
+                    ],
+                  })
+                }
+                className="text-xs font-semibold text-primary hover:bg-primary/5 px-2 py-1 rounded-lg"
+              >
+                + Add Step
+              </button>
+            </div>
+
+            {steps.map((step, stepIndex) => (
+              <div key={`${block.localId}-step-${stepIndex}`} className="rounded-xl border border-outline-variant/25 p-3 bg-surface-container-low space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-on-surface">Step {stepIndex + 1}</p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateSimulation({
+                        steps: steps.filter((_, idx) => idx !== stepIndex),
+                      })
+                    }
+                    className="text-xs text-error hover:bg-error/10 px-2 py-1 rounded-lg"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
+                  placeholder="Step title"
+                  value={step.title || ''}
+                  onChange={(e) => updateSimulationStep(stepIndex, { title: e.target.value })}
+                />
+                <textarea
+                  rows={2}
+                  className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-sm outline-none focus:border-primary resize-y"
+                  placeholder="Step explanation"
+                  value={step.explanation || ''}
+                  onChange={(e) => updateSimulationStep(stepIndex, { explanation: e.target.value })}
+                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs outline-none focus:border-primary"
+                    placeholder="Active nodes (comma separated)"
+                    value={(step.activeNodes || []).join(', ')}
+                    onChange={(e) =>
+                      updateSimulationStep(stepIndex, {
+                        activeNodes: e.target.value.split(',').map((v) => v.trim()).filter(Boolean),
+                      })
+                    }
+                  />
+                  <input
+                    type="text"
+                    className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs outline-none focus:border-primary"
+                    placeholder="Active edges (comma separated)"
+                    value={(step.activeEdges || []).join(', ')}
+                    onChange={(e) =>
+                      updateSimulationStep(stepIndex, {
+                        activeEdges: e.target.value.split(',').map((v) => v.trim()).filter(Boolean),
+                      })
+                    }
+                  />
+                </div>
+                <textarea
+                  rows={3}
+                  className="w-full bg-white border border-outline-variant/40 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-primary resize-y"
+                  placeholder="State values (key=value per line)"
+                  value={stateValuesToText(step.stateValues || {})}
+                  onChange={(e) => updateSimulationStep(stepIndex, { stateValues: parseStateValuesText(e.target.value) })}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-xl border border-outline-variant/20 p-4 bg-surface-container-low">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-outline mb-3">Preview</p>
+            <InteractiveSimulationBlock block={{ ...block, content: simData }} compact />
+          </div>
+        </section>
+      );
+    }
     
     return null;
   };
@@ -440,6 +773,9 @@ export default function LessonEditor() {
               <button onClick={() => addBlock('WRITTEN_QUIZ')} className="px-4 py-2 rounded-full border border-outline-variant/50 hover:bg-surface hover:text-primary hover:border-primary transition-all text-sm font-medium flex items-center gap-2 text-on-surface-variant">
                 <span className="material-symbols-outlined text-[1.2rem]">edit_document</span> Written
               </button>
+              <button onClick={() => addBlock('INTERACTIVE_SIMULATION')} className="px-4 py-2 rounded-full border border-outline-variant/50 hover:bg-surface hover:text-primary hover:border-primary transition-all text-sm font-medium flex items-center gap-2 text-on-surface-variant">
+                <span className="material-symbols-outlined text-[1.2rem]">experiment</span> Simulation
+              </button>
             </div>
           </div>
         </main>
@@ -457,6 +793,7 @@ export default function LessonEditor() {
               <button onClick={() => addBlock('QUIZ')} className="text-sm text-left px-3 py-2 rounded-lg bg-surface-container hover:bg-primary/10 transition-colors font-medium flex items-center gap-2"><span className="material-symbols-outlined text-sm">quiz</span> Quick Quiz</button>
               <button onClick={() => addBlock('WRITTEN_QUIZ')} className="text-sm text-left px-3 py-2 rounded-lg bg-surface-container hover:bg-primary/10 transition-colors font-medium flex items-center gap-2"><span className="material-symbols-outlined text-sm">edit_document</span> Written Quiz</button>
               <button onClick={() => addBlock('DISCUSSION')} className="text-sm text-left px-3 py-2 rounded-lg bg-surface-container hover:bg-primary/10 transition-colors font-medium flex items-center gap-2"><span className="material-symbols-outlined text-sm">forum</span> Discussion Prompt</button>
+              <button onClick={() => addBlock('INTERACTIVE_SIMULATION')} className="text-sm text-left px-3 py-2 rounded-lg bg-surface-container hover:bg-primary/10 transition-colors font-medium flex items-center gap-2"><span className="material-symbols-outlined text-sm">experiment</span> Interactive Simulation</button>
             </div>
           </div>
         )}
