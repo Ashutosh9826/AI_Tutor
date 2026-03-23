@@ -7,6 +7,23 @@ import TopNavBar from '../components/TopNavBar';
 import Sidebar from '../components/Sidebar';
 
 const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const DEFAULT_AI_ESTIMATE_SECONDS = 60;
+
+const estimateAiGenerationSeconds = (durationMinutes) => {
+  const parsedMinutes = Number(durationMinutes);
+  if (!Number.isFinite(parsedMinutes)) {
+    return DEFAULT_AI_ESTIMATE_SECONDS;
+  }
+
+  return Math.max(25, Math.min(180, Math.round(18 + parsedMinutes * 1.4)));
+};
+
+const formatDuration = (seconds) => {
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+  const mins = Math.floor(safeSeconds / 60);
+  const secs = safeSeconds % 60;
+  return mins > 0 ? `${mins}m ${String(secs).padStart(2, '0')}s` : `${secs}s`;
+};
 
 export default function ClassStreamPage() {
   const location = useLocation();
@@ -42,6 +59,8 @@ export default function ClassStreamPage() {
   const [aiReferenceContent, setAiReferenceContent] = useState('');
   const [aiError, setAiError] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiEstimateSeconds, setAiEstimateSeconds] = useState(DEFAULT_AI_ESTIMATE_SECONDS);
+  const [aiElapsedSeconds, setAiElapsedSeconds] = useState(0);
   const [deletingAssignmentId, setDeletingAssignmentId] = useState(null);
   const [deletingLessonId, setDeletingLessonId] = useState(null);
   const [actionError, setActionError] = useState('');
@@ -92,6 +111,19 @@ export default function ClassStreamPage() {
       presenceSocketRef.current = null;
     };
   }, [classId, user?.id, user?.role]);
+
+  useEffect(() => {
+    if (!aiLoading) {
+      setAiElapsedSeconds(0);
+      return undefined;
+    }
+
+    const timer = setInterval(() => {
+      setAiElapsedSeconds((previous) => previous + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [aiLoading]);
 
   const fetchData = async () => {
     try {
@@ -190,6 +222,8 @@ export default function ClassStreamPage() {
   const handleGenerateAILesson = async (e) => {
     e.preventDefault();
     setAiError('');
+    setAiEstimateSeconds(estimateAiGenerationSeconds(aiDuration));
+    setAiElapsedSeconds(0);
     setAiLoading(true);
     if (isArchivedClass) {
       setAiError('Cannot generate lessons in an archived class. Restore the class first.');
@@ -281,6 +315,10 @@ export default function ClassStreamPage() {
     const d = new Date(dateStr);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
+
+  const aiRemainingSeconds = Math.max(aiEstimateSeconds - aiElapsedSeconds, 0);
+  const aiOvertimeSeconds = Math.max(aiElapsedSeconds - aiEstimateSeconds, 0);
+  const aiProgressPercent = Math.min((aiElapsedSeconds / aiEstimateSeconds) * 100, 100);
 
   const isArchivedClass = Boolean(classInfo?.is_archived);
 
@@ -648,7 +686,29 @@ export default function ClassStreamPage() {
             {aiLoading ? (
               <div className="py-8 flex flex-col items-center justify-center space-y-4">
                 <div className="w-12 h-12 border-4 border-outline-variant border-t-primary rounded-full animate-spin"></div>
-                <p className="text-sm font-medium text-on-surface animate-pulse">Drafting lesson with AI... This may take up to 30 seconds.</p>
+                <div className="w-full space-y-2">
+                  <p className="text-sm font-medium text-on-surface text-center">Drafting lesson with AI...</p>
+                  <div className="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-500"
+                      style={{ width: `${aiProgressPercent}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-xs text-on-surface-variant text-center">
+                    Elapsed: {formatDuration(aiElapsedSeconds)}
+                    {' • '}
+                    Estimated total: {formatDuration(aiEstimateSeconds)}
+                  </p>
+                  {aiOvertimeSeconds === 0 ? (
+                    <p className="text-xs font-semibold text-primary text-center">
+                      Estimated time left: {formatDuration(aiRemainingSeconds)}
+                    </p>
+                  ) : (
+                    <p className="text-xs font-semibold text-tertiary text-center">
+                      Taking longer than expected by {formatDuration(aiOvertimeSeconds)}. Still generating...
+                    </p>
+                  )}
+                </div>
               </div>
             ) : (
               <form onSubmit={handleGenerateAILesson} className="space-y-4">
