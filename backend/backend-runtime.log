@@ -4,3 +4,9 @@
 
 [dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  enable debug logging with { debug: true }
 Server is running on port 5000
+requireTeacher check: {
+  userId: '915a93d5-a01b-4f97-9262-6f219f002023',
+  role: 'TEACHER',
+  iat: 1774266707,
+  exp: 1774353107
+}
