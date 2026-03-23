@@ -14,29 +14,55 @@ router.get('/class/:classId', authenticateToken, async (req, res) => {
       return res.status(401).json({ error: 'Invalid session. Please sign in again.' });
     }
 
+    const targetClass = await prisma.class.findUnique({
+      where: { id: classId },
+      select: { id: true, teacher_id: true },
+    });
+
+    if (!targetClass) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+
+    if (role === 'TEACHER') {
+      if (targetClass.teacher_id !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    } else {
+      const enrollment = await prisma.enrollment.findFirst({
+        where: {
+          class_id: classId,
+          user_id: userId,
+        },
+      });
+
+      if (!enrollment) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
     const assignments = await prisma.assignment.findMany({
       where: { class_id: classId },
       orderBy: { due_date: 'asc' },
-      ...(role === 'STUDENT'
-        ? {
-            include: {
-              submissions: {
-                where: { student_id: userId },
-                select: { id: true }
-              }
-            }
-          }
-        : {})
     });
 
     if (role === 'STUDENT') {
-      const studentAssignments = assignments.map((assignment) => {
-        const { submissions, ...rest } = assignment;
-        return {
-          ...rest,
-          completed: submissions.length > 0
-        };
-      });
+      const assignmentIds = assignments.map((assignment) => assignment.id);
+      const submissions = assignmentIds.length
+        ? await prisma.submission.findMany({
+            where: {
+              assignment_id: { in: assignmentIds },
+              student_id: userId,
+            },
+            select: { assignment_id: true },
+          })
+        : [];
+
+      const submittedAssignmentIds = new Set(submissions.map((submission) => submission.assignment_id));
+      const studentAssignments = assignments.map((assignment) => ({
+        ...assignment,
+        completed: submittedAssignmentIds.has(assignment.id),
+      }));
+
       return res.json(studentAssignments);
     }
 
@@ -51,25 +77,59 @@ router.get('/class/:classId', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    if (!req.user?.userId) {
+    const { userId, role } = req.user || {};
+
+    if (!userId) {
       return res.status(401).json({ error: 'Invalid session. Please sign in again.' });
+    }
+
+    const include = {
+      class: {
+        select: { id: true, name: true, teacher_id: true },
+      },
+    };
+
+    if (role === 'STUDENT') {
+      include.submissions = {
+        where: { student_id: userId },
+      };
     }
 
     const assignment = await prisma.assignment.findUnique({
       where: { id },
-      include: {
-        class: { select: { name: true } },
-        submissions: {
-          where: { student_id: req.user.userId }
-        }
-      }
+      include,
     });
 
     if (!assignment) {
       return res.status(404).json({ error: 'Assignment not found' });
     }
 
-    res.json(assignment);
+    if (role === 'TEACHER') {
+      if (assignment.class.teacher_id !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      return res.json({
+        ...assignment,
+        class: { name: assignment.class.name, id: assignment.class.id },
+      });
+    }
+
+    const enrollment = await prisma.enrollment.findFirst({
+      where: {
+        class_id: assignment.class.id,
+        user_id: userId,
+      },
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    res.json({
+      ...assignment,
+      class: { name: assignment.class.name, id: assignment.class.id },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch assignment' });
@@ -206,12 +266,35 @@ router.put('/submissions/:submissionId/grade', authenticateToken, requireTeacher
   try {
     const { submissionId } = req.params;
     const { grade, feedback } = req.body;
+    const { userId } = req.user;
+
+    const submissionRecord = await prisma.submission.findUnique({
+      where: { id: submissionId },
+      include: {
+        assignment: {
+          include: { class: true },
+        },
+      },
+    });
+
+    if (!submissionRecord) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    if (submissionRecord.assignment.class.teacher_id !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const numericGrade = Number(grade);
+    if (!Number.isFinite(numericGrade) || numericGrade < 0 || numericGrade > 100) {
+      return res.status(400).json({ error: 'Grade must be a number between 0 and 100' });
+    }
 
     const submission = await prisma.submission.update({
       where: { id: submissionId },
       data: {
-        grade: parseFloat(grade),
-        feedback
+        grade: numericGrade,
+        feedback: typeof feedback === 'string' ? feedback : null,
       }
     });
 

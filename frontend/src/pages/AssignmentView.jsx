@@ -13,9 +13,9 @@ export default function AssignmentView() {
   
   const [submissionContent, setSubmissionContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const isTeacher = user?.role === 'TEACHER';
+  const hasSubmission = Array.isArray(assignment?.submissions) && assignment.submissions.length > 0;
 
   useEffect(() => {
     if (!user) {
@@ -46,7 +46,7 @@ export default function AssignmentView() {
       setSubmitError('');
       setSubmitting(true);
       await assignmentService.submit(id, submissionContent);
-      setSubmitted(true);
+      setSubmissionContent('');
       await fetchAssignment(); // Refresh to show submission status
     } catch (err) {
       console.error('Failed to submit:', err);
@@ -208,7 +208,7 @@ export default function AssignmentView() {
                 <>
                   <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-bold text-on-surface">Your work</h2>
-                    {(assignment.submissions?.length > 0 || submitted) ? (
+                    {hasSubmission ? (
                       <span className="text-xs font-bold uppercase tracking-widest text-secondary">Submitted</span>
                     ) : (
                       <span className="text-xs font-bold uppercase tracking-widest text-tertiary">Assigned</span>
@@ -216,7 +216,7 @@ export default function AssignmentView() {
                   </div>
                   
                   <div className="space-y-4">
-                    {(assignment.submissions?.length > 0 || submitted) ? (
+                    {hasSubmission ? (
                       <div data-testid="assignment-submitted-state" className="p-4 bg-secondary/5 rounded-xl border border-secondary/20">
                         <p className="text-sm font-bold text-secondary mb-1">Success!</p>
                         <p className="text-xs text-on-surface-variant">Your work has been turned in.</p>
