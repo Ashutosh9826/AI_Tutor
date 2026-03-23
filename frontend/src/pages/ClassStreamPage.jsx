@@ -39,6 +39,9 @@ export default function ClassStreamPage() {
   const [aiReferenceContent, setAiReferenceContent] = useState('');
   const [aiError, setAiError] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [deletingAssignmentId, setDeletingAssignmentId] = useState(null);
+  const [deletingLessonId, setDeletingLessonId] = useState(null);
+  const [actionError, setActionError] = useState('');
   const [showClassInfo, setShowClassInfo] = useState(false);
 
   useEffect(() => {
@@ -85,6 +88,7 @@ export default function ClassStreamPage() {
         setClassInfo(null);
         setLoadError('Some class details could not be loaded. Existing assignments and lessons are still shown.');
       }
+      setActionError('');
     } catch (err) {
       console.error('Failed to fetch class data:', err);
       setLoadError('Failed to load class data');
@@ -190,6 +194,48 @@ export default function ClassStreamPage() {
     }
   };
 
+  const handleDeleteAssignment = async (e, assignment) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const confirmed = window.confirm(`Delete assignment "${assignment.title}"? This also deletes all submissions.`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setActionError('');
+      setDeletingAssignmentId(assignment.id);
+      await assignmentService.remove(assignment.id);
+      setAssignments((prev) => prev.filter((item) => item.id !== assignment.id));
+    } catch (err) {
+      setActionError(err.response?.data?.error || 'Failed to delete assignment');
+    } finally {
+      setDeletingAssignmentId(null);
+    }
+  };
+
+  const handleDeleteLesson = async (e, lesson) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const confirmed = window.confirm(`Delete lesson "${lesson.title}"? This cannot be undone.`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setActionError('');
+      setDeletingLessonId(lesson.id);
+      await lessonService.remove(lesson.id);
+      setLessons((prev) => prev.filter((item) => item.id !== lesson.id));
+    } catch (err) {
+      setActionError(err.response?.data?.error || 'Failed to delete lesson');
+    } finally {
+      setDeletingLessonId(null);
+    }
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
@@ -258,6 +304,12 @@ export default function ClassStreamPage() {
           {loadError && (
             <section className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
               <p className="text-sm font-semibold text-amber-800">{loadError}</p>
+            </section>
+          )}
+
+          {actionError && (
+            <section className="mb-6 rounded-xl border border-red-300 bg-red-50 px-4 py-3">
+              <p className="text-sm font-semibold text-red-700">{actionError}</p>
             </section>
           )}
           
@@ -331,13 +383,23 @@ export default function ClassStreamPage() {
                           </p>
                         </div>
                         {user?.role === 'TEACHER' && (
-                          <Link 
-                            to={`/assignment/${assignment.id}/grade`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary/5 px-2 py-1 rounded-full border border-primary/20 transition-colors"
-                          >
-                            Grade
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <Link 
+                              to={`/assignment/${assignment.id}/grade`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary/5 px-2 py-1 rounded-full border border-primary/20 transition-colors"
+                            >
+                              Grade
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteAssignment(e, assignment)}
+                              disabled={deletingAssignmentId === assignment.id}
+                              className="text-[10px] font-bold uppercase tracking-widest text-red-600 hover:bg-red-50 px-2 py-1 rounded-full border border-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {deletingAssignmentId === assignment.id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </div>
                         )}
                         <span className="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors">chevron_right</span>
                       </div>
@@ -395,6 +457,16 @@ export default function ClassStreamPage() {
                             {' • '}{formatDate(lesson.created_at)}
                           </p>
                         </div>
+                        {user?.role === 'TEACHER' && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteLesson(e, lesson)}
+                            disabled={deletingLessonId === lesson.id}
+                            className="text-[10px] font-bold uppercase tracking-widest text-red-600 hover:bg-red-50 px-2 py-1 rounded-full border border-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {deletingLessonId === lesson.id ? 'Deleting...' : 'Delete'}
+                          </button>
+                        )}
                         <span className="material-symbols-outlined text-slate-300 group-hover:text-secondary transition-colors">chevron_right</span>
                       </div>
                     </article>

@@ -161,6 +161,10 @@ export const assignmentService = {
   grade: async (submissionId, gradeData) => {
     const response = await api.put(`/assignments/submissions/${submissionId}/grade`, gradeData);
     return response.data;
+  },
+  remove: async (id) => {
+    const response = await api.delete(`/assignments/${id}`);
+    return response.data;
   }
 };
 
@@ -179,6 +183,10 @@ export const lessonService = {
   },
   update: async (id, lessonData) => {
     const response = await api.put(`/lessons/${id}`, lessonData);
+    return response.data;
+  },
+  remove: async (id) => {
+    const response = await api.delete(`/lessons/${id}`);
     return response.data;
   },
   generateAi: async (promptData) => {

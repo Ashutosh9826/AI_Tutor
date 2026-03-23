@@ -192,4 +192,40 @@ router.put('/submissions/:submissionId/grade', authenticateToken, requireTeacher
   }
 });
 
+// Delete assignment (Teacher only, owner only)
+router.delete('/:id', authenticateToken, requireTeacher, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.user;
+
+    const assignment = await prisma.assignment.findUnique({
+      where: { id },
+      include: { class: true },
+    });
+
+    if (!assignment) {
+      return res.status(404).json({ error: 'Assignment not found' });
+    }
+
+    if (assignment.class.teacher_id !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.submission.deleteMany({
+        where: { assignment_id: id },
+      });
+
+      await tx.assignment.delete({
+        where: { id },
+      });
+    });
+
+    return res.json({ message: 'Assignment deleted successfully' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to delete assignment' });
+  }
+});
+
 module.exports = router;

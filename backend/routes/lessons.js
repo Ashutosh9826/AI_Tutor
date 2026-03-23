@@ -174,6 +174,66 @@ router.post('/', authenticateToken, requireTeacher, async (req, res) => {
   }
 });
 
+// Delete lesson (Teacher only, owner only)
+router.delete('/:id', authenticateToken, requireTeacher, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.user;
+
+    const lesson = await prisma.lesson.findUnique({
+      where: { id },
+      include: { class: true },
+    });
+
+    if (!lesson) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+
+    if (lesson.class.teacher_id !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const sessions = await tx.quizSession.findMany({
+        where: { lesson_id: id },
+        select: { id: true },
+      });
+      const sessionIds = sessions.map((s) => s.id);
+
+      if (sessionIds.length > 0) {
+        await tx.quizResponse.deleteMany({
+          where: {
+            session_id: {
+              in: sessionIds,
+            },
+          },
+        });
+      }
+
+      await tx.quizSession.deleteMany({
+        where: { lesson_id: id },
+      });
+
+      await tx.chatMessage.deleteMany({
+        where: { lesson_id: id },
+      });
+
+      await tx.lessonBlock.deleteMany({
+        where: { lesson_id: id },
+      });
+
+      await tx.lesson.delete({
+        where: { id },
+      });
+    });
+
+    return res.json({ message: 'Lesson deleted successfully' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to delete lesson' });
+  }
+});
+
 // Update lesson (Teacher only)
 router.put('/:id', authenticateToken, requireTeacher, async (req, res) => {
   try {
