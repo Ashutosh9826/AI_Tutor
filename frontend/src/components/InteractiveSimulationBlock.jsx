@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 /* ─── Constants ─── */
 
@@ -63,7 +63,7 @@ const sanitizeLibs = (libs) => {
 
 const buildSrcDoc = ({ html, css, js, libs, input, title, runKey, instanceId }) => {
   const libTags = sanitizeLibs(libs)
-    .map((url) => `<script src="${escapeHtml(url)}"><\/script>`)
+    .map((url) => `<script src="${escapeHtml(url)}"></script>`)
     .join('\n');
 
   return `<!doctype html>
@@ -133,7 +133,7 @@ const buildSrcDoc = ({ html, css, js, libs, input, title, runKey, instanceId }) 
           post('error', { message: e?.message || String(e), stack: e?.stack || '' });
         }
       })();
-    <\/script>
+    </script>
   </body>
 </html>`;
 };
@@ -219,12 +219,17 @@ export default function InteractiveSimulationBlock({ block, compact = false }) {
   const [runKey, setRunKey] = useState(0);
   const [showHint, setShowHint] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
-  const [runtimeError, setRuntimeError] = useState('');
-  const [isReady, setIsReady] = useState(false);
+  const [frameStatus, setFrameStatus] = useState({
+    instanceId: null,
+    runKey: -1,
+    runtimeError: '',
+    isReady: false,
+  });
 
-  const instanceId = useRef(
-    `sim-${block?.id || block?.localId || 'block'}-${compact ? 'c' : 'f'}`
-  ).current;
+  const instanceId = useMemo(
+    () => `sim-${block?.id || block?.localId || 'block'}-${compact ? 'c' : 'f'}`,
+    [block?.id, block?.localId, compact]
+  );
 
   const inputResult = useMemo(() => parseInputJson(sim.inputJson), [sim.inputJson]);
   const frameHeight = Math.max(280, Number(sim.height) || 420);
@@ -245,13 +250,12 @@ export default function InteractiveSimulationBlock({ block, compact = false }) {
     [sim.html, sim.css, sim.js, sim.libs, inputResult.value, sim.title, runKey, instanceId]
   );
 
-  // Reset state on content change
-  useEffect(() => {
-    setRuntimeError('');
-    setIsReady(false);
-    setShowHint(false);
-    setShowSolution(false);
-  }, [block?.id, block?.localId, block?.content, runKey]);
+  const statusForCurrentRun =
+    frameStatus.instanceId === instanceId && frameStatus.runKey === runKey
+      ? frameStatus
+      : { runtimeError: '', isReady: false };
+  const runtimeError = statusForCurrentRun.runtimeError;
+  const isReady = statusForCurrentRun.isReady;
 
   // Listen for messages from the iframe
   useEffect(() => {
@@ -260,11 +264,19 @@ export default function InteractiveSimulationBlock({ block, compact = false }) {
       if (!isObj(d) || d.channel !== CANVAS_MESSAGE_CHANNEL) return;
       if (d.instanceId !== instanceId || d.runKey !== runKey) return;
       if (d.type === 'error') {
-        setRuntimeError(d.message || 'Runtime error');
-        setIsReady(false);
+        setFrameStatus({
+          instanceId,
+          runKey,
+          runtimeError: d.message || 'Runtime error',
+          isReady: false,
+        });
       } else if (d.type === 'ready') {
-        setRuntimeError('');
-        setIsReady(true);
+        setFrameStatus({
+          instanceId,
+          runKey,
+          runtimeError: '',
+          isReady: true,
+        });
       }
     };
     window.addEventListener('message', handler);
@@ -272,8 +284,6 @@ export default function InteractiveSimulationBlock({ block, compact = false }) {
   }, [instanceId, runKey]);
 
   const reset = () => {
-    setRuntimeError('');
-    setIsReady(false);
     setRunKey((k) => k + 1);
   };
 

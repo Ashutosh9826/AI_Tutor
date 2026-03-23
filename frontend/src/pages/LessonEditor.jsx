@@ -15,11 +15,96 @@ const defaultSimulationContent = () => ({
   solutionText: '',
   html: '<div id="app"></div>',
   css: '',
-  js: '// Simulation code — use context.app, context.input, context.helpers\nconst { app, helpers } = context;\napp.innerHTML = "<h3>Hello Simulation!</h3><p>Edit the code to build your visualization.</p>";',
+  js: '// Simulation code - use context.app, context.input, context.helpers\nconst { app } = context;\napp.innerHTML = "<h3>Hello Simulation!</h3><p>Edit the code to build your visualization.</p>";',
   libs: [],
   height: 420,
   inputJson: '{}',
 });
+
+const BLOCK_TYPES_WITH_OBJECT_CONTENT = new Set([
+  'QUIZ',
+  'EXERCISE',
+  'WRITTEN_QUIZ',
+  'INTERACTIVE_SIMULATION',
+]);
+
+const defaultQuizContent = () => ({
+  question: '',
+  options: [
+    { text: '', isCorrect: true, feedback: '' },
+    { text: '', isCorrect: false, feedback: '' },
+  ],
+  timeLimit: 30,
+});
+
+const defaultWrittenQuizContent = () => ({
+  question: '',
+  idealAnswer: '',
+});
+
+const parseJsonObject = (value) => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== 'string') {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeSimulationContent = (raw) => {
+  const base = defaultSimulationContent();
+  const parsed = parseJsonObject(raw) || {};
+
+  if (parsed.canvasSandbox && typeof parsed.canvasSandbox === 'object' && parsed.canvasSandbox.enabled) {
+    const legacySandbox = parsed.canvasSandbox;
+    return {
+      ...base,
+      title: typeof parsed.title === 'string' ? parsed.title : base.title,
+      description: typeof parsed.description === 'string' ? parsed.description : base.description,
+      hint: typeof parsed.hint === 'string' ? parsed.hint : base.hint,
+      solutionText: typeof parsed.solutionText === 'string' ? parsed.solutionText : base.solutionText,
+      html: typeof legacySandbox.html === 'string' ? legacySandbox.html : base.html,
+      css: typeof legacySandbox.css === 'string' ? legacySandbox.css : base.css,
+      js: typeof legacySandbox.js === 'string' ? legacySandbox.js : base.js,
+      libs: Array.isArray(legacySandbox.libs) ? legacySandbox.libs : base.libs,
+      height: Number(legacySandbox.height) > 0 ? Number(legacySandbox.height) : base.height,
+      inputJson:
+        typeof legacySandbox.inputJson === 'string'
+          ? legacySandbox.inputJson
+          : JSON.stringify(legacySandbox.inputJson ?? {}),
+    };
+  }
+
+  return {
+    ...base,
+    title: typeof parsed.title === 'string' ? parsed.title : base.title,
+    description: typeof parsed.description === 'string' ? parsed.description : base.description,
+    hint: typeof parsed.hint === 'string' ? parsed.hint : base.hint,
+    solutionText: typeof parsed.solutionText === 'string' ? parsed.solutionText : base.solutionText,
+    html: typeof parsed.html === 'string' ? parsed.html : base.html,
+    css: typeof parsed.css === 'string' ? parsed.css : base.css,
+    js: typeof parsed.js === 'string' ? parsed.js : base.js,
+    libs: Array.isArray(parsed.libs) ? parsed.libs.filter((v) => typeof v === 'string') : base.libs,
+    height: Number(parsed.height) > 0 ? Number(parsed.height) : base.height,
+    inputJson:
+      typeof parsed.inputJson === 'string'
+        ? parsed.inputJson
+        : JSON.stringify(parsed.inputJson ?? {}),
+  };
+};
+
+const getDefaultContentForType = (type) => {
+  if (type === 'QUIZ' || type === 'EXERCISE') return defaultQuizContent();
+  if (type === 'WRITTEN_QUIZ') return defaultWrittenQuizContent();
+  if (type === 'INTERACTIVE_SIMULATION') return defaultSimulationContent();
+  return '';
+};
 
 export default function LessonEditor() {
   const location = useLocation();
@@ -62,19 +147,24 @@ export default function LessonEditor() {
       setTitle(data.title);
       
       if (data.blocks && data.blocks.length > 0) {
-        setBlocks(data.blocks.map(b => {
-          let parsedContent = b.content;
-          if (
-            (b.type === 'QUIZ' ||
-              b.type === 'EXERCISE' ||
-              b.type === 'WRITTEN_QUIZ' ||
-              b.type === 'INTERACTIVE_SIMULATION') &&
-            typeof b.content === 'string'
-          ) {
-            try { parsedContent = JSON.parse(b.content); } catch (e) { console.error(e); }
-          }
-          return { ...b, localId: b.id, content: parsedContent };
-        }));
+        setBlocks(
+          data.blocks.map((b) => {
+            let parsedContent = b.content;
+
+            if (BLOCK_TYPES_WITH_OBJECT_CONTENT.has(b.type)) {
+              const parsed = parseJsonObject(b.content);
+              if (b.type === 'INTERACTIVE_SIMULATION') {
+                parsedContent = normalizeSimulationContent(parsed || b.content);
+              } else {
+                parsedContent = parsed || getDefaultContentForType(b.type);
+              }
+            } else if (b.type === 'CODE') {
+              parsedContent = typeof b.content === 'string' ? b.content : '';
+            }
+
+            return { ...b, localId: b.id, content: parsedContent };
+          })
+        );
       } else {
         // Init with one empty text block
         setBlocks([{ localId: generateId(), type: 'TEXT', content: '' }]);
@@ -93,14 +183,7 @@ export default function LessonEditor() {
     try {
       const sanitizedBlocks = blocks.map((b) => ({
         type: b.type,
-        content:
-          (b.type === 'QUIZ' ||
-            b.type === 'EXERCISE' ||
-            b.type === 'WRITTEN_QUIZ' ||
-            b.type === 'INTERACTIVE_SIMULATION') &&
-          typeof b.content !== 'string'
-            ? b.content
-            : b.content,
+        content: b.content,
       }));
       
       const updatedLesson = await lessonService.update(lessonId, {
@@ -119,23 +202,23 @@ export default function LessonEditor() {
   };
 
   const updateBlock = (localId, newContent) => {
-    setBlocks(blocks.map(b => b.localId === localId ? { ...b, content: newContent } : b));
+    setBlocks((prev) =>
+      prev.map((b) => (b.localId === localId ? { ...b, content: newContent } : b))
+    );
   };
 
   const addBlock = (type) => {
-    const newBlock = { 
-      localId: generateId(), 
-      type, 
-      content: (type === 'QUIZ' || type === 'EXERCISE') ? { question: '', options: [{text: '', isCorrect: true, feedback: ''}, {text: '', isCorrect: false, feedback: ''}], timeLimit: 30 } : 
-               (type === 'WRITTEN_QUIZ') ? { question: '', idealAnswer: '' } :
-               (type === 'INTERACTIVE_SIMULATION') ? defaultSimulationContent() : '' 
+    const newBlock = {
+      localId: generateId(),
+      type,
+      content: getDefaultContentForType(type),
     };
-    setBlocks([...blocks, newBlock]);
+    setBlocks((prev) => [...prev, newBlock]);
     setShowAiMenu(false);
   };
 
   const deleteBlock = (localId) => {
-    setBlocks(blocks.filter(b => b.localId !== localId));
+    setBlocks((prev) => prev.filter((b) => b.localId !== localId));
   };
 
   const moveBlock = (index, direction) => {
@@ -329,10 +412,14 @@ export default function LessonEditor() {
     }
 
     if (block.type === 'INTERACTIVE_SIMULATION') {
-      const simData = typeof block.content === 'object' ? block.content : defaultSimulationContent();
+      const simData = normalizeSimulationContent(block.content);
       const updateSimulation = (changes) => updateBlock(block.localId, { ...simData, ...changes });
       const libsToText = (libs) => (Array.isArray(libs) ? libs.join('\n') : '');
-      const parseLibsText = (text) => text.split('\n').map(s => s.trim()).filter(Boolean);
+      const parseLibsText = (text) =>
+        text
+          .split('\n')
+          .map((s) => s.trim())
+          .filter((s) => /^https?:\/\/\S+$/i.test(s));
 
       return (
         <section key={block.localId} className="group relative bg-surface-container-lowest rounded-xl p-8 transition-all hover:shadow-lg notebook-line border-l-2 border-transparent hover:border-l-primary mb-8">

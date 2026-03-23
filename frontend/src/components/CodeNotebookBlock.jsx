@@ -186,7 +186,7 @@ const buildSrcDoc = ({ code, runKey, instanceId }) => {
           post('error', { message: e?.message || String(e), stack: e?.stack || '' });
         }
       })();
-    <\/script>
+    </script>
   </body>
 </html>`;
 };

@@ -12,6 +12,68 @@ import TeacherControlPanel from '../components/TeacherControlPanel';
 
 const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
 
+const parseJsonObject = (value) => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== 'string') {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeSimulationContent = (raw) => {
+  const parsed = parseJsonObject(raw) || {};
+  const legacySandbox = parsed.canvasSandbox && typeof parsed.canvasSandbox === 'object' ? parsed.canvasSandbox : null;
+
+  const html = legacySandbox ? legacySandbox.html : parsed.html;
+  const css = legacySandbox ? legacySandbox.css : parsed.css;
+  const js = legacySandbox ? legacySandbox.js : parsed.js;
+  const libs = legacySandbox ? legacySandbox.libs : parsed.libs;
+  const height = legacySandbox ? legacySandbox.height : parsed.height;
+  const inputJson = legacySandbox ? legacySandbox.inputJson : parsed.inputJson;
+
+  return {
+    title: typeof parsed.title === 'string' ? parsed.title : 'Interactive Simulation',
+    description: typeof parsed.description === 'string' ? parsed.description : '',
+    hint: typeof parsed.hint === 'string' ? parsed.hint : '',
+    solutionText: typeof parsed.solutionText === 'string' ? parsed.solutionText : '',
+    html: typeof html === 'string' ? html : '<div id="app"></div>',
+    css: typeof css === 'string' ? css : '',
+    js: typeof js === 'string' ? js : '',
+    libs: Array.isArray(libs) ? libs.filter((v) => typeof v === 'string') : [],
+    height: Number(height) > 0 ? Number(height) : 420,
+    inputJson: typeof inputJson === 'string' ? inputJson : JSON.stringify(inputJson ?? {}),
+  };
+};
+
+const normalizeLessonBlock = (block) => {
+  if (block.type === 'INTERACTIVE_SIMULATION') {
+    return { ...block, content: normalizeSimulationContent(block.content) };
+  }
+
+  if (block.type === 'QUIZ' || block.type === 'EXERCISE' || block.type === 'WRITTEN_QUIZ') {
+    return {
+      ...block,
+      content: parseJsonObject(block.content) || {},
+    };
+  }
+
+  if (block.type === 'CODE') {
+    return {
+      ...block,
+      content: typeof block.content === 'string' ? block.content : '',
+    };
+  }
+
+  return block;
+};
+
 export default function LiveLessonView() {
   const { user } = useAuthStore();
   const location = useLocation();
@@ -59,22 +121,7 @@ export default function LiveLessonView() {
       try {
         const data = await lessonService.getById(lessonId);
         if (data.blocks) {
-          data.blocks = data.blocks.map((b) => {
-            if (
-              (b.type === 'QUIZ' ||
-                b.type === 'EXERCISE' ||
-                b.type === 'WRITTEN_QUIZ' ||
-                b.type === 'INTERACTIVE_SIMULATION') &&
-              typeof b.content === 'string'
-            ) {
-              try {
-                return { ...b, content: JSON.parse(b.content) };
-              } catch (error) {
-                console.error('Failed to parse block content', b.type, error);
-              }
-            }
-            return b;
-          });
+          data.blocks = data.blocks.map(normalizeLessonBlock);
         }
         setLesson(data);
       } catch (err) {
@@ -343,6 +390,7 @@ export default function LiveLessonView() {
                     <article key={block.id}>
                       <CodeNotebookBlock
                         code={block.content}
+                        editable={false}
                         blockId={block.id}
                       />
                     </article>
