@@ -32,6 +32,8 @@ Read this first in every new AI session.
   - Card navigation now uses a keyboard-accessible container.
   - Teacher `Grade` link and `Delete` button remain independent controls.
 - `data-testid` hooks remain on key auth/class/lesson/assignment controls for stable automation hooks.
+- Frontend Vite scripts now use `--configLoader native` to avoid the Windows Tailwind oxide / Rolldown `EPERM` config-loading failure.
+- Frontend routes are lazy-loaded in `frontend/src/App.jsx` to keep the main bundle smaller and avoid the previous chunk-size warning.
 
 ## Block UX Rules
 - `INTERACTIVE_SIMULATION`:
@@ -66,7 +68,6 @@ Read this first in every new AI session.
 ## Current Gaps / Next
 - Add attendance analytics/export.
 - Add E2E smoke for AI-generated lessons and attendance flow (if test suite is reintroduced).
-- Resolve local Vite/Tailwind oxide build environment issue if it reappears.
 
 ## Context Size Rules
 - Keep file under ~3,500 chars preferred (hard max 8,000).
@@ -86,4 +87,8 @@ Read this first in every new AI session.
 - Removed generated test artifacts and test suites by request.
 - Removed test-only config/scripts/dependencies from backend and frontend manifests.
 - Retained runtime fixes (realtime handler extraction and assignment-card nested-link fix).
+
+### 2026-03-24 - Windows Build Fix
+- Resolved the local Tailwind oxide / Vite config loader `EPERM` issue by switching frontend Vite scripts to `--configLoader native`.
+- Added route-level lazy loading so the frontend production bundle no longer emits the previous oversized-chunk warning.
 <!-- SESSION_LOG_END -->
