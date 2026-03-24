@@ -1,28 +1,48 @@
-# AI Tutor Workspace
+# Academic Atelier
 
-Clean foundation for the AI Tutor platform.
+## Local Development
 
-## Structure
+This project uses PostgreSQL locally through Docker Compose.
 
-- `backend/`: Express + Prisma API + Socket.IO
-- `frontend/`: React + Vite web client
-- `docs/`: archived notes and legacy design references
-- `PROJECT_CONTEXT.md`: compact, AI-friendly project continuity file
-- `scripts/compact-context.mjs`: auto-compacts `PROJECT_CONTEXT.md`
+### 1. Start local database
 
-## Quick Start
+From the project root:
 
-1. Install dependencies:
-   - `npm run setup`
-2. Create environment files:
-   - Copy `backend/.env.example` to `backend/.env`
-   - Copy `frontend/.env.example` to `frontend/.env`
-3. Run apps:
-   - Backend: `npm run dev:backend`
-   - Frontend: `npm run dev:frontend`
+```bash
+docker-compose up -d
+```
 
-## Context Continuity
+### 2. Backend environment
 
-- Update `PROJECT_CONTEXT.md` at the end of each work session.
-- Run `npm run context:compact` after edits to keep context small.
-- New AI sessions should read `PROJECT_CONTEXT.md` first.
+`backend/.env` should include:
+
+```env
+DATABASE_URL="postgresql://admin:password@localhost:5432/atelier_dev?schema=public"
+REDIS_URL=""
+```
+
+`REDIS_URL` is intentionally empty for local development so realtime presence/quiz state falls back to in-memory storage.
+
+### 3. Apply Prisma schema
+
+From `backend/`:
+
+```bash
+npx prisma migrate dev --name init
+```
+
+### 4. Start app servers
+
+Open two terminals:
+
+1. In `backend/` run:
+
+```bash
+npm run dev
+```
+
+2. In `frontend/` run:
+
+```bash
+npm run dev
+```
