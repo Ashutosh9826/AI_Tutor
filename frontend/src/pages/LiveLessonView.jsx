@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import useAuthStore from '../store/useAuthStore';
-import { chatService, lessonService } from '../services/api';
+import { chatService, lessonService, SOCKET_BASE_URL } from '../services/api';
 import ChatAssistant from '../components/ChatAssistant';
 import InteractiveQuiz from '../components/InteractiveQuiz';
 import WrittenQuiz from '../components/WrittenQuiz';
@@ -10,7 +10,7 @@ import InteractiveSimulationBlock from '../components/InteractiveSimulationBlock
 import CodeNotebookBlock from '../components/CodeNotebookBlock';
 import TeacherControlPanel from '../components/TeacherControlPanel';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const SOCKET_URL = SOCKET_BASE_URL;
 
 const parseJsonObject = (value) => {
   if (value && typeof value === 'object' && !Array.isArray(value)) {

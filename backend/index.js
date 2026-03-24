@@ -2,22 +2,27 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
+const { createClient } = require('redis');
+const { createAdapter } = require('@socket.io/redis-adapter');
 const { PrismaClient } = require('@prisma/client');
 require('dotenv').config({ override: true });
 const { registerRealtimeHandlers } = require('./realtime/registerRealtimeHandlers');
 
 const app = express();
 const server = http.createServer(app);
+const frontendOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+const corsOptions = {
+  origin: frontendOrigin,
+  credentials: true,
+  methods: ['GET', 'POST']
+};
 const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
+  cors: corsOptions
 });
 const prisma = new PrismaClient({ log: ['info', 'warn', 'error'] });
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Basic health check route
@@ -53,6 +58,25 @@ app.get('/classes', async (req, res) => {
 
 registerRealtimeHandlers(io);
 
-server.listen(PORT, () => {
+async function configureRedisAdapter() {
+  if (!process.env.REDIS_URL) {
+    return;
+  }
+
+  const pubClient = createClient({ url: process.env.REDIS_URL });
+  const subClient = pubClient.duplicate();
+  await Promise.all([pubClient.connect(), subClient.connect()]);
+  io.adapter(createAdapter(pubClient, subClient));
+}
+
+async function startServer() {
+  await configureRedisAdapter();
+  server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+  });
+}
+
+startServer().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
 });

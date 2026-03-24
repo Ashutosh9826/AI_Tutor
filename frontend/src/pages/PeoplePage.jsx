@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { attendanceService, classService } from '../services/api';
+import { attendanceService, classService, SOCKET_BASE_URL } from '../services/api';
 import useAuthStore from '../store/useAuthStore';
 import TopNavBar from '../components/TopNavBar';
 import Sidebar from '../components/Sidebar';
 
 const getTodayDate = () => new Date().toISOString().slice(0, 10);
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const SOCKET_URL = SOCKET_BASE_URL;
 
 const formatDate = (dateValue) => {
   if (!dateValue) return '-';

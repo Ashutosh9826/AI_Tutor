@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { assignmentService, classService, lessonService } from '../services/api';
+import { assignmentService, classService, lessonService, SOCKET_BASE_URL } from '../services/api';
 import useAuthStore from '../store/useAuthStore';
 import TopNavBar from '../components/TopNavBar';
 import Sidebar from '../components/Sidebar';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const SOCKET_URL = SOCKET_BASE_URL;
 const DEFAULT_AI_ESTIMATE_SECONDS = 60;
 
 const estimateAiGenerationSeconds = (durationMinutes) => {
