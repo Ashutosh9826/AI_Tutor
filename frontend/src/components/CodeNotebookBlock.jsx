@@ -517,7 +517,7 @@ const buildSrcDoc = ({ executionPayload, runKey, instanceId }) => {
             post('error', { message, stack: error?.stack || '' });
           });
       })();
-    <\/script>
+    <${'/'}script>
   </body>
 </html>`;
 };
