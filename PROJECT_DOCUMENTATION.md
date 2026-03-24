@@ -13,13 +13,7 @@
 
 ### Product Design Language (Required Context for Contributors)
 
-The intended UX direction is explicitly:
-
-- **Fun, adventurous, lighthearted** classroom experience.
-- **Colorful cartoon/comic-book visual style**.
-- Designed for a **target age demographic of 5-8 years old**.
-
-This design target should guide future UI decisions (layout, imagery, iconography, motion, typography tone, and microcopy), even where current implementation still mixes broader "general productivity" styling.
+Target Demographic is University/College students. The current UI styling is approved, but any future UI additions or changes must be designed with adults in mind (professional, minimalist, high information density).
 
 ## Section 2 - Feature List (High Level)
 
@@ -630,6 +624,7 @@ Additional routes:
 - Prisma datasource is configured for PostgreSQL:
   - `provider = "postgresql"`
   - `url = env("DATABASE_URL")`
+- Local development PostgreSQL orchestration is now committed via root `docker-compose.yml` (`postgres:15-alpine`, persistent volume, port `5432`).
 - Backend includes PostgreSQL client dependency `pg`.
 - Frontend and socket URLs are env-driven from `VITE_API_URL` and derived `SOCKET_BASE_URL`.
 - Backend CORS origin uses `FRONTEND_URL` with credentials enabled.
@@ -661,6 +656,8 @@ Frontend:
 - Legacy SQLite artifacts have been removed from `backend/prisma/`:
   - `dev.db`
   - `init.sql`
+- A PostgreSQL migration baseline was generated/applied locally:
+  - `backend/prisma/migrations/20260324134326_init/migration.sql`
 
 ## Section 10 - Discovered Architecture Details
 
@@ -695,3 +692,60 @@ Frontend:
 
 8. **Current backend uses Express 5.x with commonjs modules.**
    - Error handling is explicit per route (try/catch + response JSON), no centralized global error middleware found in scanned files.
+
+9. **Shared Redis connectivity is centralized.**
+   - `backend/services/redisClient.js` provides a reusable Redis client accessor.
+   - Presence and quiz-state logic both use this helper and automatically degrade to in-memory behavior when Redis is unavailable.
+
+## Section 11 - Local Development Environment (Validated)
+
+### Local infrastructure files
+
+- Root [`docker-compose.yml`](D:/AI_Tutor/docker-compose.yml):
+  - Service: `postgres`
+  - Image: `postgres:15-alpine`
+  - Credentials:
+    - `POSTGRES_USER=admin`
+    - `POSTGRES_PASSWORD=password`
+    - `POSTGRES_DB=atelier_dev`
+  - Port mapping: `5432:5432`
+  - Named volume: `postgres_data`
+- Backend env file [`backend/.env`](D:/AI_Tutor/backend/.env):
+  - `DATABASE_URL="postgresql://admin:password@localhost:5432/atelier_dev?schema=public"`
+  - `REDIS_URL=""` (empty by design for local in-memory fallback mode)
+
+### Local bootstrap commands
+
+Run from project root:
+
+```bash
+docker-compose up -d
+```
+
+Then from `backend/`:
+
+```bash
+npx prisma migrate dev --name init
+```
+
+Then run both dev servers:
+
+```bash
+# terminal 1
+cd backend
+npm run dev
+
+# terminal 2
+cd frontend
+npm run dev
+```
+
+### Verified runtime endpoints
+
+- Frontend dev server: `http://localhost:5173`
+- Backend API: `http://localhost:5000`
+- Local PostgreSQL container: `atelier-postgres` on `localhost:5432`
+
+### Local notes
+
+- With placeholder/missing Google OAuth client ID, login page can show Google Sign-In console errors until `VITE_GOOGLE_CLIENT_ID` is configured.

@@ -11,10 +11,22 @@ const { registerRealtimeHandlers } = require('./realtime/registerRealtimeHandler
 const app = express();
 const server = http.createServer(app);
 const frontendOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+const allowedOrigins = new Set([
+  frontendOrigin,
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+]);
 const corsOptions = {
-  origin: frontendOrigin,
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
-  methods: ['GET', 'POST']
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'Content-Type']
 };
 const io = new Server(server, {
   cors: corsOptions

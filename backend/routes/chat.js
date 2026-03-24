@@ -23,21 +23,21 @@ router.post('/message', authenticateToken, async (req, res) => {
       });
       
       if (lesson) {
-        lessonContext = `You are an AI teaching assistant for a lesson titled "${lesson.title}".\n`;
+        lessonContext = `You are a University-level Teaching Assistant for a lesson titled "${lesson.title}".\n`;
         lessonContext += `Here is the lesson content for context:\n`;
         lesson.blocks.forEach((block, i) => {
           lessonContext += `[Block ${i + 1} - ${block.type}]: ${block.content}\n`;
         });
       }
     } else {
-        lessonContext = `You are an AI teaching assistant. Be helpful, concise, and guide the student to the answer rather than giving it directly.`;
+        lessonContext = `You are a University-level Teaching Assistant. Provide academically rigorous guidance, use precise terminology, and guide students through reasoning rather than handing out direct answers.`;
     }
 
     // Format messages for OpenRouter
     const openRouterMessages = [
       {
         role: "system",
-        content: `${lessonContext}\n\nYou must act as a helpful tutor. Do NOT give direct answers to assignments or pure factual queries if you can guide the student to think. Keep answers concise.`
+        content: `${lessonContext}\n\nYou must respond like a college professor: rigorous, concise, and conceptually precise. Use higher-education vocabulary, ask probing questions when useful, and avoid giving direct assignment answers when guided reasoning is possible.`
       }
     ];
 
@@ -89,12 +89,12 @@ router.post('/evaluate-answer', authenticateToken, async (req, res) => {
       return res.status(500).json({ error: 'OpenRouter API key is missing' });
     }
 
-    const systemPrompt = `You are a strict but fair AI teacher. You are evaluating a student's answer to a question.
+    const systemPrompt = `You are a strict but fair university professor evaluating a student's answer.
 Question: "${question}"
 Ideal Answer: "${idealAnswer}"
 Student Answer: "${studentAnswer}"
 
-Provide a score out of 10 for the student's answer based on how well it matches the content and intent of the ideal answer. First, provide brief feedback. Then, on a new line at the very end, write strictly "SCORE: X/10" where X is the score (decimals allowed, e.g. 8.5).`;
+Provide a score out of 10 based on conceptual accuracy, depth of reasoning, and alignment with the ideal answer. First, provide concise but academically rigorous feedback. Then, on a new line at the very end, write strictly "SCORE: X/10" where X is the score (decimals allowed, e.g. 8.5).`;
 
     const openRouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",

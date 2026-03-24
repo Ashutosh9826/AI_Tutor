@@ -819,7 +819,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Generate lesson with AI (Teacher only)
 router.post('/generate', authenticateToken, requireTeacher, async (req, res) => {
   try {
-    const { topic, gradeLevel, targetDuration, referenceContent } = req.body;
+    const { topic, targetDuration, referenceContent } = req.body;
 
     if (!hasUsableOpenRouterApiKey()) {
       return res.status(500).json({
@@ -829,13 +829,13 @@ router.post('/generate', authenticateToken, requireTeacher, async (req, res) => 
     }
 
     const safeTopic = String(topic || '').trim() || 'Untitled Topic';
-    const audience = String(gradeLevel || 'High School / College').trim();
+    const audience = 'University / College';
     const durationMinutes = Math.max(10, Number(targetDuration) || 30);
     const reference = String(referenceContent || '').trim();
 
     // Step 1 — Structure: lesson outline and section flow.
-    const structureSystemPrompt = `You are a curriculum architect.
-Create only the high-level lesson structure.
+    const structureSystemPrompt = `You are a University-level Teaching Assistant and curriculum architect.
+Create only the high-level lesson structure for university/college learners.
 
 Return ONLY valid JSON with this shape:
 {
@@ -855,6 +855,8 @@ Return ONLY valid JSON with this shape:
 Rules:
 - 3 to 6 sections.
 - Keep section flow logical from introduction to assessment.
+- Assume learners are university/college students with baseline prerequisite knowledge.
+- Objectives should reflect higher-order outcomes (analysis, synthesis, evaluation, application).
 - Do not generate detailed block content in this step.
 - Do not include markdown or commentary.`;
 
@@ -870,8 +872,8 @@ ${reference ? `Reference content:\n${reference}` : 'Reference content: none'}`;
     const structurePlan = normalizeStructurePlan(rawStructurePlan, safeTopic, durationMinutes);
 
     // Step 2 — Block Strategy: decide where each block type goes.
-    const blockStrategySystemPrompt = `You are a lesson planner.
-You will receive a lesson structure and must assign block types to each section.
+    const blockStrategySystemPrompt = `You are a University-level Teaching Assistant planning academically rigorous instruction.
+You will receive a lesson structure and must assign block types to each section for college-level learners.
 
 Allowed block types only:
 TEXT, CODE, EXERCISE, QUIZ, DISCUSSION, WRITTEN_QUIZ, INTERACTIVE_SIMULATION
@@ -894,6 +896,7 @@ Rules:
 - Keep QUIZ near the end.
 - Include at least one CODE, one EXERCISE, and one INTERACTIVE_SIMULATION across the lesson.
 - Keep each section focused; usually 1-3 blocks per section.
+- Prioritize analytical reasoning, technical depth, and problem-solving progression.
 - Do not include detailed block content in this step.
 - Do not include markdown or commentary.`;
 
@@ -911,8 +914,8 @@ ${reference ? `Reference content:\n${reference}` : 'Reference content: none'}`;
     const strategyPlan = normalizeBlockStrategyPlan(rawBlockStrategy, structurePlan);
 
     // Step 3 — Full Lesson: generate detailed content based on structure + block strategy.
-    const fullLessonSystemPrompt = `You are a curriculum content generator.
-Generate the full lesson content based on the provided structure and block strategy.
+    const fullLessonSystemPrompt = `You are a University-level Teaching Assistant generating academically rigorous lesson content.
+Generate the full lesson content based on the provided structure and block strategy for university/college students.
 
 Return ONLY valid JSON with this exact top-level shape:
 {
@@ -932,11 +935,11 @@ Use only these block types:
 7. INTERACTIVE_SIMULATION
 
 Block content requirements:
-- TEXT: clear, concise explanation text.
+- TEXT: precise, academically dense explanation text using discipline-appropriate terminology.
 - CODE: notebook-ready JavaScript as plain string. For multiple runnable sections, separate with lines that start with "// %%".
 - EXERCISE: object with "question" and "options"; each option includes "text", "isCorrect", and "feedback".
 - QUIZ: object with "question", "options", and "timeLimit".
-- DISCUSSION: thought-provoking prompt string.
+- DISCUSSION: intellectually challenging prompt that encourages critique, comparison, or synthesis.
 - WRITTEN_QUIZ: object with "question" and "idealAnswer".
 - INTERACTIVE_SIMULATION: object with:
   "title","description","hint","solutionText","html","css","js","libs","height","inputJson"
@@ -944,6 +947,8 @@ Block content requirements:
 
 Quality requirements:
 - Keep content classroom-safe and deterministic.
+- Use advanced vocabulary and complex concepts appropriate for higher education.
+- Do not simplify explanations for K-12 audiences.
 - Match the given section order and block placement.
 - Do not include markdown fences or commentary.`;
 
