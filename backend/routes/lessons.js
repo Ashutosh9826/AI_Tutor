@@ -21,6 +21,31 @@ const ALLOWED_BLOCK_TYPES = new Set([
   'INTERACTIVE_SIMULATION',
 ]);
 
+const authorizeClassAccess = async ({ classId, userId, role }) => {
+  const targetClass = await prisma.class.findUnique({
+    where: { id: classId },
+    select: { id: true, teacher_id: true },
+  });
+
+  if (!targetClass) {
+    return { notFound: true, allowed: false };
+  }
+
+  if (role === 'TEACHER') {
+    return { notFound: false, allowed: targetClass.teacher_id === userId };
+  }
+
+  const enrollment = await prisma.enrollment.findFirst({
+    where: {
+      class_id: classId,
+      user_id: userId,
+    },
+    select: { id: true },
+  });
+
+  return { notFound: false, allowed: Boolean(enrollment) };
+};
+
 const tryParseJson = (value) => {
   try {
     return JSON.parse(value);
@@ -724,6 +749,20 @@ Do not include explanatory text before or after the JSON.`;
 router.get('/class/:classId', authenticateToken, async (req, res) => {
   try {
     const { classId } = req.params;
+    const { userId, role } = req.user || {};
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Invalid session. Please sign in again.' });
+    }
+
+    const authorization = await authorizeClassAccess({ classId, userId, role });
+    if (authorization.notFound) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+    if (!authorization.allowed) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     const lessons = await prisma.lesson.findMany({
       where: { class_id: classId },
       orderBy: { created_at: 'desc' }
@@ -739,6 +778,12 @@ router.get('/class/:classId', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const { userId, role } = req.user || {};
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Invalid session. Please sign in again.' });
+    }
+
     const lesson = await prisma.lesson.findUnique({
       where: { id },
       include: {
@@ -750,6 +795,18 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
     if (!lesson) {
       return res.status(404).json({ error: 'Lesson not found' });
+    }
+
+    const authorization = await authorizeClassAccess({
+      classId: lesson.class_id,
+      userId,
+      role,
+    });
+    if (authorization.notFound) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+    if (!authorization.allowed) {
+      return res.status(403).json({ error: 'Access denied' });
     }
 
     res.json(lesson);

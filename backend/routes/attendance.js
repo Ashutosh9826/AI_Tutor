@@ -65,7 +65,7 @@ const buildDaySnapshot = async ({ classId, start, end }) => {
   ]);
 
   const recordByStudentId = new Map(records.map((record) => [record.student_id, record]));
-  const onlineStudentSet = new Set(getOnlineStudentIdsForClass(classId));
+  const onlineStudentSet = new Set(await getOnlineStudentIdsForClass(classId));
 
   const students = enrollments.map((enrollment) => {
     const record = recordByStudentId.get(enrollment.user_id);
@@ -253,7 +253,7 @@ router.post('/class/:classId/day/automatic', authenticateToken, requireTeacher, 
       where: { class_id: classId },
       select: { user_id: true },
     });
-    const onlineStudentSet = new Set(getOnlineStudentIdsForClass(classId));
+    const onlineStudentSet = new Set(await getOnlineStudentIdsForClass(classId));
 
     await prisma.$transaction(
       enrollments.map((enrollment) =>
